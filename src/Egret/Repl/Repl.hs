@@ -13,12 +13,14 @@ import           Text.Megaparsec
 import           Egret.Parser.Utils
 import           Egret.Parser.Tactic
 
+import           Egret.Ppr
+
 import           System.IO
 
 repl :: ProofM String IO ()
 repl = forever $ do
   goal <- gets _currentGoal
-  liftIO $ print goal
+  liftIO $ putStrLn $ ppr goal
 
   liftIO $ putStr "> "
   liftIO $ hFlush stdout

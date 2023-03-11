@@ -19,3 +19,9 @@ forall t. flipH (cw (cw (flipH t))) = cw (cw t)
 {x-symmetry}
 forall t. flipH (cw t) = ccw (flipH t)
 
+{ccw/flipH/cw}
+forall t. flipV t = ccw (flipH (cw t))
+
+{flipV/flipH}
+forall t. flipV (flipH t) = cw (cw t)
+

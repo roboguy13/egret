@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Egret.Ppr
   (Ppr (..)
   ,ppr
@@ -12,4 +15,6 @@ class Ppr a where
 
 ppr :: Ppr a => a -> String
 ppr = show . pprDoc
+
+instance Ppr String where pprDoc = text
 
