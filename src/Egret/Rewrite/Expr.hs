@@ -45,7 +45,7 @@ instance Ppr a => Ppr (Expr a) where
   pprDoc (V x) = pprDoc x
   pprDoc (App f x) = sep [pprDoc f, pprArg x]
     where
-      pprArg (App g y) = text "(" <> sep [pprDoc g, pprDoc y] <> text ")"
+      pprArg app@(App {}) = text "(" <> pprDoc app <> text ")"
       pprArg a = pprDoc a
 
 
