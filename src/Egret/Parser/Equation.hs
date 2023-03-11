@@ -43,11 +43,11 @@ parseEquation = label "equation" $ lexeme $ do
   pure (lhs :=: rhs)
 
 parseEquationDef :: Parser (String, ParsedForall String)
-parseEquationDef = do
+parseEquationDef = label "equation definition" $ lexeme $ do
   name <- parseRuleName
   eqn <- parseQuantified
   pure (name, eqn)
 
 parseEquationDefs :: Parser (EquationDB String)
-parseEquationDefs = some parseEquationDef
+parseEquationDefs = optional sc *> some parseEquationDef
 

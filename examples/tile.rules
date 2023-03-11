@@ -1,3 +1,21 @@
+-- Based on an example from Algebra-Driven Design, which
+-- is in turn based on Hendersen 2002.
+
 {cw/cw/cw/cw}
 forall t. cw (cw (cw (cw t))) = t
+
+{ccw/cw}
+forall t. ccw (cw t) = t
+
+{cw/ccw}
+forall t. cw (ccw t) = t
+
+{flipH/flipH}
+forall t. flipH (flipH t) = t
+
+{flipH/cw/cw/flipH}
+forall t. flipH (cw (cw (flipH t))) = cw (cw t)
+
+{x-symmetry}
+forall t. flipH (cw t) = ccw (flipH t)
 
