@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cabal exec egret -- $1
+

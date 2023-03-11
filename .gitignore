@@ -1,0 +1,9 @@
+dist-newstyle
+dist
+**/.DS_Store
+.stack-work
+.stack-work/*
+**/*.o
+**/*.hi
+**/*~
+
