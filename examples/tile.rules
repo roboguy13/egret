@@ -1,6 +1,11 @@
 -- Based on an example from Algebra-Driven Design, which
 -- is in turn based on Hendersen 2002.
 
+cw :: Tile -> Tile
+ccw :: Tile -> Tile
+flipH :: Tile -> Tile
+flipV :: Tile -> Tile
+
 {cw/cw/cw/cw}
 forall t. cw (cw (cw (cw t))) = t
 
