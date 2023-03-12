@@ -2,6 +2,7 @@
 
 module Egret.Tactic.Tactic
   (Tactic (..)
+  ,tacticName
   ,tacticToRewrite
   ,tacticToDirectedQEquation
   )
@@ -23,6 +24,10 @@ data Tactic a
   = RewriteTactic Direction a
   | UsingReplaceTactic a (Equation Expr String)
   deriving (Show, Functor)
+
+tacticName :: Tactic a -> a
+tacticName (RewriteTactic _ a) = a
+tacticName (UsingReplaceTactic a _) = a
 
 tacticToRewrite :: EquationDB String -> Tactic String -> Either String (Rewrite Expr String)
 tacticToRewrite eqnDb tactic =

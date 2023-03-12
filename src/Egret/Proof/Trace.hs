@@ -12,6 +12,8 @@ import           Egret.Tactic.Tactic
 
 import           Egret.Proof.Goal
 
+import           Egret.Ppr
+
 import           Control.Lens.TH
 
 import           Data.Maybe
@@ -37,6 +39,19 @@ $(makeLenses ''ProofTrace)
 instance Semigroup (ProofTrace a) where
   ProofTrace goal1 steps1 <> ProofTrace goal2 steps2 =
     ProofTrace goal2 (steps2 <> steps1)
+
+instance Ppr a => Ppr (ProofTraceStep a) where
+  pprDoc (ProofTraceStep e tactic) =
+    text (ppr e)
+      $$ (text " ={" <> pprDoc (tacticName tactic) <> text "}")
+
+instance Ppr a => Ppr (ProofTrace a) where
+  pprDoc (ProofTrace goal steps0) =
+    let steps = reverse steps0
+    in
+    vcat (map pprDoc steps)
+      $$
+    pprDoc goal
 
 singletonTrace :: Goal a -> ProofTraceStep a -> ProofTrace a
 singletonTrace x y = ProofTrace x [y]

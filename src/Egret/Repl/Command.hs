@@ -21,6 +21,7 @@ data Command
   = RunBruteForce (Maybe Int) (Expr String)
   | RunTactic (Tactic String)
   | Undo
+  | Log
   deriving (Show)
 
 parseCommand :: Parser Command
@@ -28,6 +29,8 @@ parseCommand =
   try parseUndo
     <|>
   try parseRunTactic
+    <|>
+  try parseLog
     <|>
   parseRunBruteForce
 
@@ -40,6 +43,9 @@ parseRunBruteForce = label "brute_force usage" $ do
 
 parseUndo :: Parser Command
 parseUndo = keyword "undo" $> Undo
+
+parseLog :: Parser Command
+parseLog = keyword "log" $> Log
 
 parseRunTactic :: Parser Command
 parseRunTactic = RunTactic <$> parseTactic

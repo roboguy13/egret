@@ -83,20 +83,19 @@ makeTree expr0 = do
   goal <- asks _bruteForceGoalRhs
   eqnDb <- asks _bruteForceEqnDb
 
-  pure $ go goal eqnDb expr0 mempty fuel
+  pure $ go goal eqnDb expr0 Nothing fuel
   where
-    go goal eqnDb expr re 0 = OutOfFuel (go goal eqnDb expr re)
-    go goal eqnDb expr re fuel
+    go goal eqnDb expr tactic 0 = OutOfFuel (go goal eqnDb expr tactic)
+    go goal eqnDb expr tactic fuel
       | expr == goal = Success (emptyTrace expr)
       | otherwise =
-          case rewriteHere re expr of
+          case runTactic eqnDb tactic expr of
             Nothing -> Failure (fuel-1)
             Just newExpr ->
               let tactics = concatMap (makeTactics . fst) eqnDb
-                  rewrites = map (unEither . tacticToRewrite eqnDb) tactics
                   fuels = branchFuels fuel (length eqnDb)
-                  results0 = zipWith (go goal eqnDb newExpr) rewrites fuels
-                  results = map (fmap (singletonTrace undefined undefined <>)) results0
+                  results0 = zipWith (go goal eqnDb newExpr) (map Just tactics) fuels
+                  results = map (updateTrace expr newExpr tactic) results0
               in
               sconcat (toNonEmpty results)
 
@@ -105,6 +104,12 @@ makeTree expr0 = do
 
     toNonEmpty [] = error "makeTree: Empty list of results"
     toNonEmpty (x:xs) = x :| xs
+
+    runTactic _ Nothing = Just
+    runTactic eqnDb (Just tactic) = rewriteHere (unEither (tacticToRewrite eqnDb tactic))
+
+    updateTrace _ _ Nothing = id
+    updateTrace expr newExpr (Just tactic) = fmap (singletonTrace newExpr (ProofTraceStep expr tactic) <>)
 
 branchFuels :: Int -> Int -> [Int]
 branchFuels totalFuel branchCount =

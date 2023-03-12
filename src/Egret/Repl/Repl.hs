@@ -40,7 +40,7 @@ repl = forever $ do
         Nothing ->
           liftIO $ putStrLn "Tactic failed"
 
-        Just () -> repl
+        Just () -> pure ()
 
     Right (RunBruteForce fuelMaybe targetExpr) -> do
       eqnDb <- ask
@@ -48,5 +48,15 @@ repl = forever $ do
         Left err -> liftIO $ putStrLn err
         Right tr -> do
           modify (<> tr)
-          repl
+
+    Right Undo -> do
+      tr <- get
+      case traceUndo tr of
+        Left err -> liftIO $ putStrLn err
+        Right newTr -> put newTr
+
+    Right Log -> do
+      tr <- get
+      liftIO $ putStrLn $ ppr tr
+      liftIO $ putStrLn ""
 
