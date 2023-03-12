@@ -32,9 +32,11 @@ repl = forever $ do
 
   input <- liftIO getLine
 
+  typeEnv <- asks _proofEnvTypeEnv
+
   case parse' parseCommand input of
     Left err ->
-      liftIO $ putStrLn $ "Cannot parse tactic:\n" ++ err
+      liftIO $ putStrLn $ "Cannot parse command:\n" ++ err
 
     Right (RunTactic tactic) -> do
       applyTacticM tactic >>= \case
@@ -44,8 +46,8 @@ repl = forever $ do
         Just () -> pure ()
 
     Right (RunBruteForce fuelMaybe targetExpr) -> do
-      eqnDb <- ask
-      case bruteForce defaultBruteForce eqnDb (goal :=: targetExpr) of
+      eqnDb <- asks _proofEnvEqnDb
+      case bruteForce typeEnv defaultBruteForce eqnDb (goal :=: targetExpr) of
         Left err -> liftIO $ putStrLn err
         Right tr -> do
           modify (<> tr)

@@ -14,6 +14,8 @@ import           Egret.Parser.Expr
 import           Egret.Parser.RulesFile
 import           Egret.Parser.Utils
 
+import           Egret.TypeChecker.Type
+
 import           Egret.Rewrite.Equation
 
 import           System.IO
@@ -23,12 +25,13 @@ import           System.Exit
 main :: IO ()
 main = do
   ruleFileName <- getRuleFileName
-  ruleDb <- parseRuleDb ruleFileName
+  (typeEnv, ruleDb) <- parseRules ruleFileName
 
+  -- print typeEnv
   putStr "Enter initial expression: "
   hFlush stdout
   initialGoal <- requiredParseIO "<stdin>" parseExpr =<< getLine
-  runProofM ruleDb initialGoal repl
+  runProofM typeEnv ruleDb initialGoal repl
 
 getRuleFileName :: IO String
 getRuleFileName =
@@ -38,9 +41,10 @@ getRuleFileName =
       hPutStrLn stderr $ "Expected exactly one argument (the rule file name). Got " ++ show (length xs)
       exitWith $ ExitFailure 1
 
-parseRuleDb :: String -> IO (EquationDB String)
-parseRuleDb fileName =
-  fmap _rulesFileEqnDb $ requiredParseIO fileName parseRulesFile =<< readFile fileName
+parseRules :: String -> IO (TypeEnv, EquationDB String)
+parseRules fileName = do
+  rulesFile <- requiredParseIO fileName parseRulesFile =<< readFile fileName
+  pure (toTypeEnv (_rulesFileSigs rulesFile), _rulesFileEqnDb rulesFile)
 
 -- parseRuleDb :: String -> IO (EquationDB String)
 -- parseRuleDb fileName =

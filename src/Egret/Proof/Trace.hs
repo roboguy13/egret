@@ -10,6 +10,8 @@ import           Egret.Rewrite.Equation
 
 import           Egret.Tactic.Tactic
 
+import           Egret.TypeChecker.Type
+
 import           Egret.Proof.Goal
 
 import           Egret.Ppr
@@ -72,9 +74,9 @@ previousGoal = go . _traceSteps
     go [] = Nothing
     go (ProofTraceStep previous _ : _) = Just previous
 
-applyToGoal :: EquationDB String -> Tactic String -> ProofTrace String -> Either String (ProofTrace String)
-applyToGoal eqnDb tactic (ProofTrace goal steps) = do
-  re <- tacticToRewrite eqnDb tactic
+applyToGoal :: TypeEnv -> EquationDB String -> Tactic String -> ProofTrace String -> Either String (ProofTrace String)
+applyToGoal typeEnv eqnDb tactic (ProofTrace goal steps) = do
+  re <- tacticToRewrite typeEnv eqnDb tactic
   newGoal <- case rewriteHere re goal of
     Nothing -> Left "Rewrite tactic failed"
     Just x -> Right x

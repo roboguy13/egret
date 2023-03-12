@@ -47,21 +47,8 @@ rewriteFail = Rewrite (const Nothing)
 data At a = At Int a
   deriving (Show, Functor)
 
-mkAtRewrite :: (Show (f a), Plated (f a)) => At (Rewrite f a) -> Rewrite f a
-mkAtRewrite = Rewrite . rewriteAt
-
 rewriteHere :: Rewrite f a -> f a -> Maybe (f a)
 rewriteHere = runRewrite
-
-rewriteAt :: (Show (f a), Plated (f a)) => At (Rewrite f a) -> f a -> Maybe (f a)
-rewriteAt (At ix0 re) x =
-    let res = allRewrites re x
-    in
-    traceShow (take 30 res) $ go ix0 res
-  where
-    go _ [] = Nothing
-    go 0 (x:_) = Just x
-    go ix (_:xs) = go (ix-1) xs
 
 rewriteThere :: Data (f a) => Rewrite f a -> (f a -> Bool) -> f a -> Maybe (f a)
 rewriteThere re p =
@@ -84,13 +71,4 @@ rewriteEverywhere re fa =
 
 rewriteEverywhere' :: Data (f a) => Rewrite f a -> f a -> f a
 rewriteEverywhere' re fa = fromMaybe fa (rewriteEverywhere re fa)
-
-allRewrites :: Plated (f a) => Rewrite f a -> f a -> [f a]
-allRewrites re fa =
-  maybeCons (rewriteHere re fa)
-    $ concatMap (experiment (allRewrites re)) (holes fa)
-
-maybeCons :: Maybe a -> [a] -> [a]
-maybeCons Nothing xs = xs
-maybeCons (Just x) xs = x : xs
 

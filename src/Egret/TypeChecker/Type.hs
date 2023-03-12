@@ -4,6 +4,10 @@ module Egret.TypeChecker.Type
   (Type (..)
   ,TypeEnv
   ,TypeSig (..)
+  ,toTypeEnv
+  ,mkAtRewrite
+  ,rewriteAt
+  ,allWellTypedRewrites
   ,ensureWellTypedRewrite
   ,typeInferEquation
   ,typeInfer
@@ -20,7 +24,13 @@ import           Egret.Rewrite.Equation
 
 import           Control.Monad.Reader
 
+import           Control.Comonad.Store
+
+import           Control.Lens.Plated
+
 import           Control.Applicative
+
+import Debug.Trace
 
 data Type
   = BaseType String
@@ -34,14 +44,50 @@ instance Ppr Type where
 data TypeSig = TypeSig String Type
   deriving (Show)
 
+toTypeEnv :: [TypeSig] -> TypeEnv
+toTypeEnv = map go
+  where
+    go (TypeSig x y) = (x, y)
+
 -- | Well-typed input ==> well-typed output
 ensureWellTypedRewrite :: TypeEnv -> Rewrite Expr String -> Rewrite Expr String
 ensureWellTypedRewrite env re = Rewrite $ \x ->
   let r = runRewrite re x
+      b1 = not (isWellTyped env x)
+      b2 = or (fmap (isWellTyped env) r)
   in
-  if not (isWellTyped env x) || or (fmap (isWellTyped env) r)
+  if b1 || b2
+    -- then trace ("well-typed implication: " ++ show (x, r)) r
     then r
-    else Nothing
+    else trace ("not well-typed, " ++ show (b1,b2) ++ ": " ++ show (ppr x, fmap ppr r)) Nothing
+
+allWellTypedRewrites :: TypeEnv -> Rewrite Expr String -> Expr String -> [Expr String]
+allWellTypedRewrites typeEnv re fa = 
+  maybeCons (rewriteHere (ensureWellTypedRewrite typeEnv re) fa)
+    $ concatMap (experiment (allWellTypedRewrites typeEnv re)) (holes fa)
+
+mkAtRewrite :: TypeEnv -> At (Rewrite Expr String) -> Rewrite Expr String
+mkAtRewrite env = Rewrite . rewriteAt env
+
+rewriteAt :: TypeEnv -> At (Rewrite Expr String) -> Expr String -> Maybe (Expr String)
+rewriteAt env (At ix0 re) x =
+    let res = allWellTypedRewrites env re x
+    in
+    traceShow (take 30 res) $ go ix0 res
+  where
+    go _ [] = Nothing
+    go 0 (x:_) = Just x
+    go ix (_:xs) = go (ix-1) xs
+
+
+-- allRewrites :: Plated (f a) => Rewrite f a -> f a -> [f a]
+-- allRewrites re fa =
+--   maybeCons (rewriteHere re fa)
+--     $ concatMap (experiment (allRewrites re)) (holes fa)
+
+maybeCons :: Maybe a -> [a] -> [a]
+maybeCons Nothing xs = xs
+maybeCons (Just x) xs = x : xs
 
 type TypeEnv = [(String, Type)]
 

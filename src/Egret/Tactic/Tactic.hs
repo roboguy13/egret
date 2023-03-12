@@ -17,6 +17,8 @@ import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
 import           Egret.Rewrite.Unify
 
+import           Egret.TypeChecker.Type
+
 import           Egret.Proof.Goal
 
 import           Control.Applicative
@@ -46,11 +48,12 @@ tacticName :: Tactic a -> a
 tacticName (BasicTactic x) = basicTacticName x
 tacticName (AtTactic (At _ x)) = basicTacticName x
 
-tacticToRewrite :: EquationDB String -> Tactic String -> Either String (Rewrite Expr String)
-tacticToRewrite eqnDb (AtTactic (At ix tactic)) =
-  mkAtRewrite . At ix . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
-tacticToRewrite eqnDb (BasicTactic tactic) =
-  toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+tacticToRewrite :: TypeEnv -> EquationDB String -> Tactic String -> Either String (Rewrite Expr String)
+tacticToRewrite typeEnv eqnDb (AtTactic (At ix tactic)) =
+  mkAtRewrite typeEnv . At ix . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+
+tacticToRewrite typeEnv eqnDb (BasicTactic tactic) =
+  ensureWellTypedRewrite typeEnv . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
 
 basicTacticToDirectedQEquation :: EquationDB String -> BasicTactic String -> Either String (DirectedQEquation String)
 basicTacticToDirectedQEquation eqnDb (RewriteTactic' dir name) =

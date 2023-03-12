@@ -18,6 +18,8 @@ import           Egret.Rewrite.Rewrite
 
 import           Egret.Tactic.Tactic
 
+import           Egret.TypeChecker.Type
+
 import           Egret.Proof.Trace
 
 import           Control.Monad.Reader
@@ -45,12 +47,13 @@ data BruteForceEnv a =
   { _bruteForceConfig :: BruteForceConfig
   , _bruteForceGoalRhs :: Expr a
   , _bruteForceEqnDb :: EquationDB a
+  , _bruteForceTypeEnv :: TypeEnv
   , _bruteForceCurrentFuel :: Int
   }
 
 
-bruteForce :: BruteForceConfig -> EquationDB String -> Equation Expr String -> Either String (ProofTrace String)
-bruteForce config eqnDb (startLhs :=: goalRhs) =
+bruteForce :: TypeEnv -> BruteForceConfig -> EquationDB String -> Equation Expr String -> Either String (ProofTrace String)
+bruteForce typeEnv config eqnDb (startLhs :=: goalRhs) =
   let
     startFuel = _bruteForceStartFuel config
     env = BruteForceEnv
@@ -58,6 +61,7 @@ bruteForce config eqnDb (startLhs :=: goalRhs) =
           , _bruteForceGoalRhs = goalRhs
           , _bruteForceEqnDb = eqnDb
           , _bruteForceCurrentFuel = startFuel
+          , _bruteForceTypeEnv = typeEnv
           }
   in
   case runSubtree env (makeTree startLhs) of
@@ -82,19 +86,20 @@ makeTree expr0 = do
   fuel <- asks _bruteForceCurrentFuel
   goal <- asks _bruteForceGoalRhs
   eqnDb <- asks _bruteForceEqnDb
+  typeEnv <- asks _bruteForceTypeEnv
 
-  pure $ go goal eqnDb expr0 Nothing fuel
+  pure $ go goal typeEnv eqnDb expr0 Nothing fuel
   where
-    go goal eqnDb expr tactic 0 = OutOfFuel (go goal eqnDb expr tactic)
-    go goal eqnDb expr tactic fuel
+    go goal typeEnv eqnDb expr tactic 0 = OutOfFuel (go goal typeEnv eqnDb expr tactic)
+    go goal typeEnv eqnDb expr tactic fuel
       | expr == goal = Success (emptyTrace expr)
       | otherwise =
-          case runTactic eqnDb tactic expr of
+          case runTactic typeEnv eqnDb tactic expr of
             Nothing -> Failure (fuel-1)
             Just newExpr ->
               let tactics = concatMap (makeTactics . fst) eqnDb
                   fuels = branchFuels fuel (length eqnDb)
-                  results0 = zipWith (go goal eqnDb newExpr) (map Just tactics) fuels
+                  results0 = zipWith (go goal typeEnv eqnDb newExpr) (map Just tactics) fuels
                   results = map (updateTrace expr newExpr tactic) results0
               in
               sconcat (toNonEmpty results)
@@ -105,8 +110,8 @@ makeTree expr0 = do
     toNonEmpty [] = error "makeTree: Empty list of results"
     toNonEmpty (x:xs) = x :| xs
 
-    runTactic _ Nothing = Just
-    runTactic eqnDb (Just tactic) = rewriteHere (unEither (tacticToRewrite eqnDb tactic))
+    runTactic _ _ Nothing = Just
+    runTactic typeEnv eqnDb (Just tactic) = rewriteHere (unEither (tacticToRewrite typeEnv eqnDb tactic))
 
     updateTrace _ _ Nothing = id
     updateTrace expr newExpr (Just tactic) = fmap (singletonTrace newExpr (ProofTraceStep expr tactic) <>)
