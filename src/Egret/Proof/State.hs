@@ -6,6 +6,7 @@ module Egret.Proof.State
   ,runProofM
   ,applyTacticM
   ,module Control.Monad.State
+  ,module Control.Monad.Reader
   ,module Egret.Proof.Trace
   )
   where
@@ -38,5 +39,5 @@ applyTacticM tactic = do
       eqnDb <- ask
       case applyToGoal eqnDb tactic tr of
         Left {} -> pure Nothing
-        Right r -> pure $ Just ()
+        Right newTr -> put newTr $> Just ()
 

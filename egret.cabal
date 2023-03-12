@@ -40,6 +40,7 @@ executable egret
       Egret.Proof.Trace
 
       Egret.Repl.Repl
+      Egret.Repl.Command
 
       Egret.Rewrite.Equation
       Egret.Rewrite.Expr

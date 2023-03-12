@@ -13,6 +13,10 @@ import           Text.Megaparsec
 import           Egret.Parser.Utils
 import           Egret.Parser.Tactic
 
+import           Egret.Repl.Command
+
+import           Egret.Solver.BruteForce
+
 import           Egret.Ppr
 
 import           System.IO
@@ -27,14 +31,22 @@ repl = forever $ do
 
   input <- liftIO getLine
 
-  case parse' parseTactic input of
+  case parse' parseCommand input of
     Left err ->
       liftIO $ putStrLn $ "Cannot parse tactic:\n" ++ err
 
-    Right tactic -> do
+    Right (RunTactic tactic) -> do
       applyTacticM tactic >>= \case
         Nothing ->
           liftIO $ putStrLn "Tactic failed"
 
         Just () -> repl
+
+    Right (RunBruteForce fuelMaybe targetExpr) -> do
+      eqnDb <- ask
+      case bruteForce defaultBruteForce eqnDb (goal :=: targetExpr) of
+        Left err -> liftIO $ putStrLn err
+        Right tr -> do
+          modify (<> tr)
+          repl
 
