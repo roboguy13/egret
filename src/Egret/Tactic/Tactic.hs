@@ -1,10 +1,14 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Egret.Tactic.Tactic
-  (Tactic (..)
+  (Tactic
+  ,pattern RewriteTactic
+  ,pattern UsingReplaceTactic
+  ,pattern RewriteAtTactic
+
   ,tacticName
   ,tacticToRewrite
-  ,tacticToDirectedQEquation
   )
   where
 
@@ -20,26 +24,40 @@ import           Control.Monad
 
 import           Data.Bifunctor
 
-data Tactic a
-  = RewriteTactic Direction a
-  | UsingReplaceTactic a (Equation Expr String)
+data BasicTactic a
+  = RewriteTactic' Direction a
+  | UsingReplaceTactic' a (Equation Expr String)
   deriving (Show, Functor)
 
+data Tactic a
+  = BasicTactic (BasicTactic a)
+  | AtTactic (At (BasicTactic a))
+  deriving (Show, Functor)
+
+pattern RewriteTactic x y = BasicTactic (RewriteTactic' x y)
+pattern UsingReplaceTactic x y = BasicTactic (UsingReplaceTactic' x y)
+pattern RewriteAtTactic x y z = AtTactic (At x (RewriteTactic' y z))
+
+basicTacticName :: BasicTactic a -> a
+basicTacticName (RewriteTactic' _ a) = a
+basicTacticName (UsingReplaceTactic' a _) = a
+
 tacticName :: Tactic a -> a
-tacticName (RewriteTactic _ a) = a
-tacticName (UsingReplaceTactic a _) = a
+tacticName (AtTactic (At _ x)) = basicTacticName x
 
 tacticToRewrite :: EquationDB String -> Tactic String -> Either String (Rewrite Expr String)
-tacticToRewrite eqnDb tactic =
-  toRewrite <$> tacticToDirectedQEquation eqnDb tactic
+tacticToRewrite eqnDb (AtTactic (At ix tactic)) =
+  mkAtRewrite . At ix . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+tacticToRewrite eqnDb (BasicTactic tactic) =
+  toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
 
-tacticToDirectedQEquation :: EquationDB String -> Tactic String -> Either String (DirectedQEquation String)
-tacticToDirectedQEquation eqnDb (RewriteTactic dir name) =
+basicTacticToDirectedQEquation :: EquationDB String -> BasicTactic String -> Either String (DirectedQEquation String)
+basicTacticToDirectedQEquation eqnDb (RewriteTactic' dir name) =
   case lookup name eqnDb of
     Nothing -> Left $ "Cannot find equation named {" ++ name ++ "}"
     Just defn -> Right $ Dir dir $ toQEquation defn
 
-tacticToDirectedQEquation eqnDb (UsingReplaceTactic name givenEqn) =
+basicTacticToDirectedQEquation eqnDb (UsingReplaceTactic' name givenEqn) =
   case lookup name eqnDb of
     Nothing -> Left $ "Cannot find equation named {" ++ name ++ "}"
     Just defn ->

@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Egret.Rewrite.Expr
   -- (ExprCode
@@ -22,15 +23,22 @@ import           Egret.Rewrite.Rewrite
 
 import           Text.Show.Deriving
 
+import           Data.Data
+import           Control.Lens.Plated
+
 data Expr a
   = V a
   | App (Expr a) (Expr a)
-  deriving (Functor, Show, Eq, Ord, Foldable, Traversable)
+  deriving (Functor, Show, Eq, Ord, Foldable, Traversable, Data)
 
 $(deriveShow1 ''Expr)
 
 type ParsedExpr = Expr String
 type ScopedExpr = Scope Int Expr
+
+instance Plated (Expr a) where
+  plate f (App x y) = App <$> f x <*> f y
+  plate _ t = pure t
 
 instance Applicative Expr where
   pure = V

@@ -22,10 +22,13 @@ data Command
   | RunTactic (Tactic String)
   | Undo
   | Log
+  | Quit
   deriving (Show)
 
 parseCommand :: Parser Command
 parseCommand =
+  try parseQuit
+    <|>
   try parseUndo
     <|>
   try parseRunTactic
@@ -35,18 +38,21 @@ parseCommand =
   parseRunBruteForce
 
 parseRunBruteForce :: Parser Command
-parseRunBruteForce = label "brute_force usage" $ do
+parseRunBruteForce = label "brute_force" $ do
   keyword "brute_force"
   fuel <- (fmap read) <$> optional (some digitChar) :: Parser (Maybe Int)
   symbol ":"
   RunBruteForce fuel <$> parseExpr
 
 parseUndo :: Parser Command
-parseUndo = keyword "undo" $> Undo
+parseUndo = label "undo" $ keyword "undo" $> Undo
 
 parseLog :: Parser Command
-parseLog = keyword "log" $> Log
+parseLog = label "log" $ keyword "log" $> Log
 
 parseRunTactic :: Parser Command
 parseRunTactic = RunTactic <$> parseTactic
+
+parseQuit :: Parser Command
+parseQuit = label "quit" $ (keyword "quit" <|> keyword "exit") $> Quit
 

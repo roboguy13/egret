@@ -20,11 +20,12 @@ import           Egret.Solver.BruteForce
 import           Egret.Ppr
 
 import           System.IO
+import           System.Exit
 
 repl :: ProofM String IO ()
 repl = forever $ do
   goal <- gets _currentGoal
-  liftIO $ putStrLn $ ppr goal
+  liftIO $ putStrLn $ "Current expression: " <> ppr goal
 
   liftIO $ putStr "> "
   liftIO $ hFlush stdout
@@ -59,4 +60,6 @@ repl = forever $ do
       tr <- get
       liftIO $ putStrLn $ ppr tr
       liftIO $ putStrLn ""
+
+    Right Quit -> liftIO exitSuccess
 

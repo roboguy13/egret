@@ -3,6 +3,7 @@ module Egret.Parser.Tactic
   )
   where
 
+import           Egret.Rewrite.Rewrite (At (..))
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
 import           Egret.Tactic.Tactic
@@ -19,6 +20,8 @@ import           Data.Maybe
 
 parseTactic :: Parser (Tactic String)
 parseTactic =
+  try parseRewriteAt
+    <|>
   try parseRewrite
     <|>
   parseUsingReplace
@@ -41,4 +44,12 @@ parseDirection = label "direction" $ lexeme $
   (symbol "->" $> Fwd)
     <|>
   (symbol "<-" $> Bwd)
+
+parseRewriteAt :: Parser (Tactic String)
+parseRewriteAt = label "rewrite-at" $ lexeme $ do
+  keyword "rewrite"
+  keyword "at"
+  ix <- label "number" $ lexeme $ read <$> some digitChar :: Parser Int
+  dir <- fromMaybe Fwd <$> optional parseDirection
+  RewriteAtTactic ix dir <$> parseRuleName
 
