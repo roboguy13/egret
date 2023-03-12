@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -64,10 +65,13 @@ bruteForce config eqnDb (startLhs :=: goalRhs) =
     Failure leftoverFuel -> Left $ "bruteForce: Failed with " ++ show leftoverFuel ++ " remaining fuel"
     Success x -> Right x
 
-data BruteForceResult f a
-  = OutOfFuel (f (BruteForceResult f a))
-  | Success (ProofTrace a)
+data BruteForceResult' f a
+  = OutOfFuel (f (BruteForceResult' f a))
+  | Success a
   | Failure Int
+  deriving (Functor)
+
+type BruteForceResult f a = BruteForceResult' f (ProofTrace a)
 
 -- | Keep track of fuel in current branch
 newtype Subtree a = Subtree (Reader (BruteForceEnv String) a)
@@ -82,16 +86,19 @@ makeTree expr0 = do
   pure $ go goal eqnDb expr0 mempty fuel
   where
     go goal eqnDb expr re 0 = OutOfFuel (go goal eqnDb expr re)
-    go goal eqnDb expr re fuel =
-      case rewriteHere re expr of
-        Nothing -> Failure (fuel-1)
-        Just newExpr ->
-          let tactics = concatMap (makeTactics . fst) eqnDb
-              rewrites = map (unEither . tacticToRewrite eqnDb) tactics
-              fuels = branchFuels fuel (length eqnDb)
-              results = zipWith (go goal eqnDb newExpr) rewrites fuels
-          in
-          sconcat (toNonEmpty results)
+    go goal eqnDb expr re fuel
+      | expr == goal = Success (emptyTrace expr)
+      | otherwise =
+          case rewriteHere re expr of
+            Nothing -> Failure (fuel-1)
+            Just newExpr ->
+              let tactics = concatMap (makeTactics . fst) eqnDb
+                  rewrites = map (unEither . tacticToRewrite eqnDb) tactics
+                  fuels = branchFuels fuel (length eqnDb)
+                  results0 = zipWith (go goal eqnDb newExpr) rewrites fuels
+                  results = map (fmap (singletonTrace undefined undefined <>)) results0
+              in
+              sconcat (toNonEmpty results)
 
     unEither (Left x) = error $ "Internal error: makeTree: Could not find a rule name that should exit: " ++ show x
     unEither (Right y) = y
@@ -129,7 +136,7 @@ instance Semigroup (BranchResult a) where
   OutOfFuel k1 <> OutOfFuel k2 = OutOfFuel (k1 <+> k2)
 
 -- | Yield when out of fuel so the branch can be resumed if another branch gives up early. The continuation contained in OutOfFuel has type @Int -> BranchResult a$
-type BranchResult = BruteForceResult ((->) Int)
+type BranchResult a = BruteForceResult ((->) Int) a
 
 type BranchContinuation a = Int -> BranchResult a
 
