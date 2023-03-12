@@ -3,6 +3,7 @@
 module Egret.TypeChecker.Type
   (Type (..)
   ,TypeEnv
+  ,TypeSig (..)
   ,ensureWellTypedRewrite
   ,typeInferEquation
   ,typeInfer
@@ -29,6 +30,9 @@ data Type
 instance Ppr Type where
   pprDoc (BaseType str) = text str
   pprDoc (FnType a b) = sep [pprDoc a, text "->", pprDoc b]
+
+data TypeSig = TypeSig String Type
+  deriving (Show)
 
 -- | Well-typed input ==> well-typed output
 ensureWellTypedRewrite :: TypeEnv -> Rewrite Expr String -> Rewrite Expr String

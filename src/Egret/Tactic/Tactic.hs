@@ -43,6 +43,7 @@ basicTacticName (RewriteTactic' _ a) = a
 basicTacticName (UsingReplaceTactic' a _) = a
 
 tacticName :: Tactic a -> a
+tacticName (BasicTactic x) = basicTacticName x
 tacticName (AtTactic (At _ x)) = basicTacticName x
 
 tacticToRewrite :: EquationDB String -> Tactic String -> Either String (Rewrite Expr String)

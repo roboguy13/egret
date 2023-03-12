@@ -11,6 +11,7 @@ import           Egret.Proof.State
 
 import           Egret.Parser.Equation
 import           Egret.Parser.Expr
+import           Egret.Parser.RulesFile
 import           Egret.Parser.Utils
 
 import           Egret.Rewrite.Equation
@@ -39,5 +40,9 @@ getRuleFileName =
 
 parseRuleDb :: String -> IO (EquationDB String)
 parseRuleDb fileName =
-  requiredParseIO fileName parseEquationDefs =<< readFile fileName
+  fmap _rulesFileEqnDb $ requiredParseIO fileName parseRulesFile =<< readFile fileName
+
+-- parseRuleDb :: String -> IO (EquationDB String)
+-- parseRuleDb fileName =
+--   requiredParseIO fileName parseEquationDefs =<< readFile fileName
 

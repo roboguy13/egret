@@ -33,6 +33,7 @@ executable egret
       Egret.Parser.Tactic
       Egret.Parser.Utils
       Egret.Parser.Type
+      Egret.Parser.RulesFile
 
       Egret.Ppr
 

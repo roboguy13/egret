@@ -1,5 +1,6 @@
 module Egret.Parser.Type
   (parseType
+  ,parseTypeSig
   )
   where
 
@@ -27,3 +28,10 @@ parseFnType = label "function type" $ lexeme $ do
   a <- parseType'
   symbol "->"
   FnType a <$> parseType
+
+parseTypeSig :: Parser TypeSig
+parseTypeSig = label "type signature" $ lexeme $ do
+  ident <- parseIdentifier
+  symbol "::"
+  TypeSig ident <$> parseType
+
