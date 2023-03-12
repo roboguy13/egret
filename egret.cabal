@@ -32,6 +32,7 @@ executable egret
       Egret.Parser.Expr
       Egret.Parser.Tactic
       Egret.Parser.Utils
+      Egret.Parser.Type
 
       Egret.Ppr
 
@@ -49,6 +50,8 @@ executable egret
       Egret.Rewrite.Unify
 
       Egret.Tactic.Tactic
+
+      Egret.TypeChecker.Type
 
       Egret.Solver.BruteForce
 
