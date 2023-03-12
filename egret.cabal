@@ -48,6 +48,8 @@ executable egret
 
       Egret.Tactic.Tactic
 
+      Egret.Solver.BruteForce
+
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     build-depends:    base ^>=4.16.4.0, lens, mtl, megaparsec, containers, pretty, deriving-compat, bound

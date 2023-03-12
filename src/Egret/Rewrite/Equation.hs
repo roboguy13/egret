@@ -6,6 +6,8 @@
 
 module Egret.Rewrite.Equation
   (Equation (..)
+  ,equationLhs
+  ,equationRhs
   ,flipEqn
   ,EquationDB (..)
   ,ParsedForall (..)
@@ -38,6 +40,10 @@ import           Egret.Rewrite.Unify
 
 data Equation f a = f a :=: f a
   deriving (Functor, Show)
+
+equationLhs, equationRhs :: Equation f a -> f a
+equationLhs (lhs :=: _) = lhs
+equationRhs (_ :=: rhs) = rhs
 
 flipEqn :: Equation f a -> Equation f a
 flipEqn (lhs :=: rhs) = rhs :=: lhs

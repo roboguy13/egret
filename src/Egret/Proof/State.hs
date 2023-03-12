@@ -33,13 +33,10 @@ applyTacticM :: Monad m => Tactic String -> ProofM String m (Maybe ())
 applyTacticM tactic = do
   (asks tacticToRewrite <*> pure tactic) >>= \case
     Left {} -> pure Nothing
-    Right re -> applyRewriteM tactic re
-
--- | Tactic argument is for recording in trace
-applyRewriteM :: Monad m => Tactic String -> Rewrite Expr String -> ProofM String m (Maybe ())
-applyRewriteM tactic re = do
-  tr <- get
-  case applyToGoal tactic (rewriteHere re) tr of
-    Just tr -> put tr $> Just ()
-    Nothing -> pure Nothing
+    Right re -> do
+      tr <- get
+      eqnDb <- ask
+      case applyToGoal eqnDb tactic tr of
+        Left {} -> pure Nothing
+        Right r -> pure $ Just ()
 

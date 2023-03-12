@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Egret.Proof.Trace
   where
 
 import           Egret.Rewrite.Expr
+import           Egret.Rewrite.Rewrite
 import           Egret.Rewrite.Equation
 
 import           Egret.Tactic.Tactic
@@ -11,6 +13,8 @@ import           Egret.Tactic.Tactic
 import           Egret.Proof.Goal
 
 import           Control.Lens.TH
+
+import           Data.Maybe
 
 data ProofTraceStep a =
   ProofTraceStep
@@ -30,6 +34,13 @@ data ProofTrace a =
 
 $(makeLenses ''ProofTrace)
 
+instance Semigroup (ProofTrace a) where
+  ProofTrace goal1 steps1 <> ProofTrace goal2 steps2 =
+    ProofTrace goal2 (steps2 <> steps1)
+
+singletonTrace :: Goal a -> ProofTraceStep a -> ProofTrace a
+singletonTrace x y = ProofTrace x [y]
+
 emptyTrace :: Goal a -> ProofTrace a
 emptyTrace goal = ProofTrace goal []
 
@@ -46,10 +57,13 @@ previousGoal = go . _traceSteps
     go [] = Nothing
     go (ProofTraceStep previous _ : _) = Just previous
 
-applyToGoal :: Applicative f => Tactic a -> (Goal a -> f (Goal a)) -> ProofTrace a -> f (ProofTrace a)
-applyToGoal tactic f (ProofTrace goal steps) =
-  let newGoalM = f goal
-      step = ProofTraceStep goal tactic
-  in
-  ProofTrace <$> newGoalM <*> pure (step : steps)
+applyToGoal :: EquationDB String -> Tactic String -> ProofTrace String -> Either String (ProofTrace String)
+applyToGoal eqnDb tactic (ProofTrace goal steps) = do
+  re <- tacticToRewrite eqnDb tactic
+  newGoal <- case rewriteHere re goal of
+    Nothing -> Left "Rewrite tactic failed"
+    Just x -> Right x
+
+  let step = ProofTraceStep goal tactic
+  Right $ ProofTrace newGoal (step : steps)
 
