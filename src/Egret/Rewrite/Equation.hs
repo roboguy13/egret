@@ -10,7 +10,10 @@ module Egret.Rewrite.Equation
   ,equationRhs
   ,flipEqn
   ,EquationDB (..)
+  ,ParsedForall' (..)
   ,ParsedForall (..)
+  ,forallQuantifiedVars
+  ,forallQuantifiedVarsDeBruijn
   ,QEquation (..)
   ,DirectedQEquation (..)
   ,Direction (..)
@@ -49,9 +52,20 @@ equationRhs (_ :=: rhs) = rhs
 flipEqn :: Equation f a -> Equation f a
 flipEqn (lhs :=: rhs) = rhs :=: lhs
 
-data ParsedForall a =
-  ParsedForall [Typed a] (Equation Expr a)
+data ParsedForall' f a b =
+  ParsedForall [a] (f b)
   deriving (Functor, Show)
+
+type ParsedForall a = ParsedForall' (Equation Expr) (Typed a) a
+
+forallQuantifiedVars :: ParsedForall' f a b -> [a]
+forallQuantifiedVars (ParsedForall xs _) = xs
+
+-- | TODO: Find a nicer design than using this
+forallQuantifiedVarsDeBruijn :: ParsedForall' f (Typed a) b -> [Typed Int]
+forallQuantifiedVarsDeBruijn (ParsedForall xs _) = zipWith go xs [0..]
+  where
+    go (Typed ty _) = Typed ty
 
 type EquationDB a = [(String, ParsedForall a)]
 

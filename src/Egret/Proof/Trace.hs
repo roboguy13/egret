@@ -6,11 +6,13 @@ module Egret.Proof.Trace
 
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Rewrite
+import           Egret.Rewrite.WellTyped
 import           Egret.Rewrite.Equation
 
 import           Egret.Tactic.Tactic
 
 import           Egret.TypeChecker.Type
+import           Egret.TypeChecker.Equation
 
 import           Egret.Proof.Goal
 
@@ -20,34 +22,34 @@ import           Control.Lens.TH
 
 import           Data.Maybe
 
-data ProofTraceStep a =
+data ProofTraceStep tyenv a =
   ProofTraceStep
-    { _stepGoal   :: Goal a
+    { _stepGoal   :: Goal tyenv
     , _stepTactic :: Tactic a
     }
   deriving (Show)
 
 $(makeLenses ''ProofTraceStep)
 
-data ProofTrace a =
+data ProofTrace tyenv a =
   ProofTrace
-    { _currentGoal :: Goal a
-    , _traceSteps :: [ProofTraceStep a]
+    { _currentGoal :: Goal tyenv
+    , _traceSteps :: [ProofTraceStep tyenv a]
     }
   deriving (Show)
 
 $(makeLenses ''ProofTrace)
 
-instance Semigroup (ProofTrace a) where
+instance Semigroup (ProofTrace tyenv a) where
   ProofTrace goal1 steps1 <> ProofTrace goal2 steps2 =
     ProofTrace goal2 (steps2 <> steps1)
 
-instance Ppr a => Ppr (ProofTraceStep a) where
+instance Ppr a => Ppr (ProofTraceStep tyenv a) where
   pprDoc (ProofTraceStep e tactic) =
     text (ppr e)
       $$ (text " ={" <> pprDoc (tacticName tactic) <> text "}")
 
-instance Ppr a => Ppr (ProofTrace a) where
+instance Ppr a => Ppr (ProofTrace tyenv a) where
   pprDoc (ProofTrace goal steps0) =
     let steps = reverse steps0
     in
@@ -55,26 +57,26 @@ instance Ppr a => Ppr (ProofTrace a) where
       $$
     pprDoc goal
 
-singletonTrace :: Goal a -> ProofTraceStep a -> ProofTrace a
+singletonTrace :: Goal tyenv -> ProofTraceStep tyenv a -> ProofTrace tyenv a
 singletonTrace x y = ProofTrace x [y]
 
-emptyTrace :: Goal a -> ProofTrace a
+emptyTrace :: Goal tyenv -> ProofTrace tyenv a
 emptyTrace goal = ProofTrace goal []
 
-traceUndo :: ProofTrace a -> Either String (ProofTrace a)
+traceUndo :: ProofTrace tyenv a -> Either String (ProofTrace tyenv a)
 traceUndo = go . _traceSteps
   where
     go [] = Left "At start, cannot undo"
     go (ProofTraceStep previous _ : xs) =
       Right $ ProofTrace previous xs
 
-previousGoal :: ProofTrace a -> Maybe (Goal a)
+previousGoal :: ProofTrace tyenv a -> Maybe (Goal tyenv)
 previousGoal = go . _traceSteps
   where
     go [] = Nothing
     go (ProofTraceStep previous _ : _) = Just previous
 
-applyToGoal :: TypeEnv -> EquationDB String -> Tactic String -> ProofTrace String -> Either String (ProofTrace String)
+applyToGoal :: TypeEnv tyenv -> TypedEquationDB tyenv -> Tactic String -> ProofTrace tyenv String -> Either String (ProofTrace tyenv String)
 applyToGoal typeEnv eqnDb tactic (ProofTrace goal steps) = do
   re <- tacticToRewrite typeEnv eqnDb tactic
   newGoal <- case rewriteHere re goal of

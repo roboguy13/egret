@@ -12,13 +12,13 @@ module Egret.Solver.BruteForce
   )
   where
 
-import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
-import           Egret.Rewrite.Rewrite
+import           Egret.Rewrite.WellTyped
 
 import           Egret.Tactic.Tactic
 
 import           Egret.TypeChecker.Type
+import           Egret.TypeChecker.Equation
 
 import           Egret.Proof.Trace
 
@@ -42,17 +42,17 @@ defaultBruteForce =
     { _bruteForceStartFuel  = 3000
     }
 
-data BruteForceEnv a =
+data BruteForceEnv tyenv a =
   BruteForceEnv
   { _bruteForceConfig :: BruteForceConfig
-  , _bruteForceGoalRhs :: Expr a
-  , _bruteForceEqnDb :: EquationDB a
-  , _bruteForceTypeEnv :: TypeEnv
+  , _bruteForceGoalRhs :: TypedExpr' tyenv a
+  , _bruteForceEqnDb :: TypedEquationDB tyenv
+  , _bruteForceTypeEnv :: TypeEnv tyenv
   , _bruteForceCurrentFuel :: Int
   }
 
 
-bruteForce :: TypeEnv -> BruteForceConfig -> EquationDB String -> Equation Expr String -> Either String (ProofTrace String)
+bruteForce :: TypeEnv tyenv -> BruteForceConfig -> TypedEquationDB tyenv -> Equation (TypedExpr' tyenv) String -> Either String (ProofTrace tyenv String)
 bruteForce typeEnv config eqnDb (startLhs :=: goalRhs) =
   let
     startFuel = _bruteForceStartFuel config
@@ -75,13 +75,13 @@ data BruteForceResult' f a
   | Failure Int
   deriving (Functor)
 
-type BruteForceResult f a = BruteForceResult' f (ProofTrace a)
+type BruteForceResult tyenv f a = BruteForceResult' f (ProofTrace tyenv a)
 
 -- | Keep track of fuel in current branch
-newtype Subtree a = Subtree (Reader (BruteForceEnv String) a)
-  deriving (Functor, Applicative, Monad, MonadReader (BruteForceEnv String))
+newtype Subtree tyenv a = Subtree (Reader (BruteForceEnv tyenv String) a)
+  deriving (Functor, Applicative, Monad, MonadReader (BruteForceEnv tyenv String))
 
-makeTree :: Expr String -> Subtree (BranchResult String)
+makeTree :: TypedExpr tyenv -> Subtree tyenv (BranchResult tyenv String)
 makeTree expr0 = do
   fuel <- asks _bruteForceCurrentFuel
   goal <- asks _bruteForceGoalRhs
@@ -127,14 +127,14 @@ branchFuels totalFuel branchCount =
       then remaining : replicate (branchCount-1) fuelPerBranch
       else replicate branchCount fuelPerBranch
 
-(<+>) :: BranchContinuation a -> BranchContinuation a -> BranchContinuation a
+(<+>) :: BranchContinuation tyenv a -> BranchContinuation tyenv a -> BranchContinuation tyenv a
 f <+> g = \fuel ->
   case f fuel of
     OutOfFuel k -> OutOfFuel k
     Success x -> Success x
     Failure remainingFuel -> g remainingFuel
 
-instance Semigroup (BranchResult a) where
+instance Semigroup (BranchResult tyenv a) where
   Success r <> _ = Success r
   _ <> Success r = Success r
 
@@ -146,13 +146,13 @@ instance Semigroup (BranchResult a) where
   OutOfFuel k1 <> OutOfFuel k2 = OutOfFuel (k1 <+> k2)
 
 -- | Yield when out of fuel so the branch can be resumed if another branch gives up early. The continuation contained in OutOfFuel has type @Int -> BranchResult a$
-type BranchResult a = BruteForceResult ((->) Int) a
+type BranchResult tyenv a = BruteForceResult tyenv ((->) Int) a
 
-type BranchContinuation a = Int -> BranchResult a
+type BranchContinuation tyenv a = Int -> BranchResult tyenv a
 
 -- | Run subtree until it succeeds, runs out of fuel or fails before running
 -- out of fuel
-runSubtree :: BruteForceEnv String -> Subtree a -> a
+runSubtree :: BruteForceEnv tyenv String -> Subtree tyenv a -> a
 runSubtree env (Subtree m) = runReader m env
 
 makeTactics :: String -> [Tactic String]

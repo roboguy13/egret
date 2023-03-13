@@ -4,5 +4,7 @@ module Egret.Proof.Goal
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
 
-type Goal a = Expr a
+import           Egret.TypeChecker.Type
+
+type Goal tyenv = TypedExpr tyenv
 

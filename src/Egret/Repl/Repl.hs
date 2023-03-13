@@ -13,6 +13,8 @@ import           Text.Megaparsec
 import           Egret.Parser.Utils
 import           Egret.Parser.Tactic
 
+import           Egret.TypeChecker.Type
+
 import           Egret.Repl.Command
 
 import           Egret.Solver.BruteForce
@@ -22,7 +24,7 @@ import           Egret.Ppr
 import           System.IO
 import           System.Exit
 
-repl :: ProofM String IO ()
+repl :: ProofM tyenv String IO ()
 repl = forever $ do
   goal <- gets _currentGoal
   liftIO $ putStrLn $ "Current expression: " <> ppr goal
@@ -47,7 +49,12 @@ repl = forever $ do
 
     Right (RunBruteForce fuelMaybe targetExpr) -> do
       eqnDb <- asks _proofEnvEqnDb
-      case bruteForce typeEnv defaultBruteForce eqnDb (goal :=: targetExpr) of
+
+      let go = do
+                (_, targetExpr') <- typeInfer typeEnv targetExpr
+                bruteForce typeEnv defaultBruteForce eqnDb (goal :=: targetExpr')
+
+      case go of
         Left err -> liftIO $ putStrLn err
         Right tr -> do
           modify (<> tr)

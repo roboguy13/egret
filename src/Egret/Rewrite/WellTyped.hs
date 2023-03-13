@@ -47,7 +47,7 @@ options xs =
   in
   coerce (Rewrite.options xs')
 
-qequationToRewrite :: TypeEnv tyenv -> TypedQEquation String -> WellTypedRewrite tyenv
+qequationToRewrite :: TypedDirectedQEquation tyenv -> WellTypedRewrite tyenv
 qequationToRewrite = undefined
 
 rewriteHere :: WellTypedRewrite tyenv -> TypedExpr tyenv -> Maybe (TypedExpr tyenv)

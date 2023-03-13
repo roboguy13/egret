@@ -10,6 +10,9 @@ import           Egret.Rewrite.Equation
 import           Egret.Rewrite.Expr
 
 import           Egret.Parser.Expr
+import           Egret.Parser.Type
+
+import           Egret.TypeChecker.Type
 
 import           Egret.Parser.Utils
 
@@ -28,12 +31,21 @@ parseQuantified = label "quantified equation" $ lexeme $ do
   forallVars <- fromMaybe [] <$> optional parseForallPart
   ParsedForall forallVars <$> parseEquation
 
-parseForallPart :: Parser [String]
+parseForallPart :: Parser [Typed String]
 parseForallPart = label "quantifier" $ lexeme $ do
   keyword "forall"
-  xs <- some parseIdentifier
+  xs <- some parseForallBinding
   symbol "."
   pure xs
+
+parseForallBinding :: Parser (Typed String)
+parseForallBinding = do
+  symbol "("
+  var <- parseIdentifier
+  symbol "::"
+  ty <- parseType
+  symbol ")"
+  pure (Typed ty var)
 
 parseEquation :: Parser (Equation Expr String)
 parseEquation = label "equation" $ lexeme $ do

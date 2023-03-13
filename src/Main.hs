@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main
   (main
@@ -15,6 +17,7 @@ import           Egret.Parser.RulesFile
 import           Egret.Parser.Utils
 
 import           Egret.TypeChecker.Type
+import           Egret.TypeChecker.Equation
 
 import           Egret.Rewrite.Equation
 
@@ -25,13 +28,19 @@ import           System.Exit
 main :: IO ()
 main = do
   ruleFileName <- getRuleFileName
-  (typeEnv, ruleDb) <- parseRules ruleFileName
 
-  -- print typeEnv
-  putStr "Enter initial expression: "
-  hFlush stdout
-  initialGoal <- requiredParseIO "<stdin>" parseExpr =<< getLine
-  runProofM typeEnv ruleDb initialGoal repl
+  withParsedRules ruleFileName $ \(tcEnv, ruleDb) -> do
+    print tcEnv
+
+    ruleDb' <- runChecked $ checkEquationDb tcEnv ruleDb
+
+    putStr "Enter initial expression: "
+    hFlush stdout
+    initialGoal <- requiredParseIO "<stdin>" parseExpr =<< getLine
+
+    (_, initialGoal') <- runChecked $ typeInfer tcEnv initialGoal
+
+    runProofM tcEnv ruleDb' initialGoal' repl
 
 getRuleFileName :: IO String
 getRuleFileName =
@@ -41,12 +50,22 @@ getRuleFileName =
       hPutStrLn stderr $ "Expected exactly one argument (the rule file name). Got " ++ show (length xs)
       exitWith $ ExitFailure 1
 
-parseRules :: String -> IO (TypeEnv, EquationDB String)
-parseRules fileName = do
+withParsedRules :: String -> (forall tyenv. (TypeEnv tyenv, EquationDB String) -> IO r) -> IO r
+withParsedRules fileName k = do
   rulesFile <- requiredParseIO fileName parseRulesFile =<< readFile fileName
-  pure (toTypeEnv (_rulesFileSigs rulesFile), _rulesFileEqnDb rulesFile)
 
--- parseRuleDb :: String -> IO (EquationDB String)
--- parseRuleDb fileName =
---   requiredParseIO fileName parseEquationDefs =<< readFile fileName
+  withTypeSigs (_rulesFileSigs rulesFile) $ \tcEnv ->
+    k (tcEnv, _rulesFileEqnDb rulesFile)
+
+checkEquationDb :: TypeEnv tyenv -> EquationDB String -> Either String (TypedEquationDB tyenv)
+checkEquationDb tcEnv = mapM go
+  where
+    go (name, eq) =
+      let tcEnv' = localTypeEnv tcEnv $ forallQuantifiedVarsDeBruijn eq
+      in
+        fmap (name,) (toTypedQEquation tcEnv' eq)
+
+runChecked :: Either String a -> IO a
+runChecked (Left err) = putStrLn err *> exitWith (ExitFailure 3)
+runChecked (Right x) = pure x
 

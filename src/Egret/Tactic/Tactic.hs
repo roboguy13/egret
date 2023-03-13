@@ -50,46 +50,47 @@ tacticName :: Tactic a -> a
 tacticName (BasicTactic x) = basicTacticName x
 tacticName (AtTactic (At _ x)) = basicTacticName x
 
-tacticToRewrite :: TypeEnv tyenv -> EquationDB String -> Tactic String -> Either String (WellTypedRewrite tyenv)
-tacticToRewrite typeEnv eqnDb (AtTactic (At ix tactic)) =
-  mkAtRewrite typeEnv . At ix <$> basicTacticToDirectedQEquation eqnDb tactic
+tacticToRewrite :: TypeEnv tyenv -> TypedEquationDB tyenv -> Tactic String -> Either String (WellTypedRewrite tyenv)
+tacticToRewrite tcEnv eqnDb (AtTactic (At ix tactic)) =
+  mkAtRewrite . At ix . qequationToRewrite <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
 
-tacticToRewrite typeEnv eqnDb (BasicTactic tactic) =
-  toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+tacticToRewrite tcEnv eqnDb (BasicTactic tactic) =
+  qequationToRewrite <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
 
-basicTacticToDirectedQEquation :: EquationDB String -> BasicTactic String -> Either String (DirectedQEquation String)
-basicTacticToDirectedQEquation eqnDb (RewriteTactic' dir name) =
+basicTacticToDirectedQEquation :: TypeEnv tyenv -> TypedEquationDB tyenv -> BasicTactic String -> Either String (TypedDirectedQEquation tyenv)
+basicTacticToDirectedQEquation tcEnv eqnDb (RewriteTactic' dir name) =
   case lookup name eqnDb of
     Nothing -> Left $ "Cannot find equation named {" ++ name ++ "}"
-    Just defn -> Right $ Dir dir $ toQEquation defn
+    Just defn -> Right $ Dir dir defn
 
-basicTacticToDirectedQEquation eqnDb (UsingReplaceTactic' name givenEqn) =
+basicTacticToDirectedQEquation tcEnv eqnDb (UsingReplaceTactic' name givenEqn) =
   case lookup name eqnDb of
     Nothing -> Left $ "Cannot find equation named {" ++ name ++ "}"
-    Just defn ->
-      case fwdUsingReplace defn givenEqn
+    Just defn -> do
+      (_, typedGivenEqn) <- typeInferEquation tcEnv givenEqn
+      case fwdUsingReplace tcEnv defn typedGivenEqn
              <|>
-           bwdUsingReplace defn givenEqn
+           bwdUsingReplace tcEnv defn typedGivenEqn
           of
         Nothing -> Left $ "Equation {" ++ name ++ "} does not apply"
         Just r -> Right r
 
-bwdUsingReplace :: ParsedForall String -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
-bwdUsingReplace def givenEqn =
-  flipDirected <$> fwdUsingReplace def (flipEqn givenEqn)
+bwdUsingReplace :: TypeEnv tyenv -> TypedQEquation tyenv -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
+bwdUsingReplace tcEnv def givenEqn =
+  flipDirected <$> fwdUsingReplace tcEnv def (flipEqn givenEqn)
 
-fwdUsingReplace :: ParsedForall String -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
-fwdUsingReplace defn givenEqn@(givenLhs :=: givenRhs) =
+fwdUsingReplace :: TypeEnv tyenv -> TypedQEquation tyenv -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
+fwdUsingReplace tcEnv defn givenEqn@(givenLhs :=: givenRhs) =
   case go of
     Left {} -> Nothing
-    Right () -> Just $ Dir Fwd $ unquantified givenEqn
+    Right () -> Just $ Dir Fwd $ typedUnquantified givenEqn
   where
     go = do
-      let defnLhs :=: defnRhs = toQEquation defn
+      let defnLhs :=: defnRhs = defn
 
-      unifyEnv <- first getUnifyError $ match defnLhs givenLhs 
+      unifyEnv <- first getUnifyError $ match tcEnv defnLhs givenLhs 
 
-      let subst'dDefRhs = applyUnifyEnv unifyEnv defnRhs
+      let subst'dDefRhs = applyBoundSubst unifyEnv defnRhs
 
       when (subst'dDefRhs /= givenRhs)
         $ Left
