@@ -20,9 +20,9 @@ module Egret.Rewrite.Equation
   ,flipDirected
   ,toQEquation
   ,unquantified
-  ,applyUnifyEnvEqn
-  ,specifyQEquation
-  ,toRewrite
+  -- ,applyUnifyEnvEqn
+  -- ,specifyQEquation
+  -- ,untypedToRewrite
   )
   where
 
@@ -55,10 +55,6 @@ data ParsedForall a =
 type EquationDB a = [(String, ParsedForall a)]
 
 
--- | Quantified Equation using Bound (de Bruijn indices)
-type QEquation           = Equation         ScopedExpr
-type DirectedQEquation a = DirectedEquation ScopedExpr a
-
 data Direction = Fwd | Bwd
   deriving (Show, Eq, Ord)
 
@@ -74,6 +70,10 @@ flipDirection Bwd = Fwd
 flipDirected :: DirectedEquation f a -> DirectedEquation f a
 flipDirected (Dir dir eqn) = Dir (flipDirection dir) eqn
 
+-- | Quantified Equation using Bound (de Bruijn indices)
+type QEquation           = Equation         ScopedExpr
+type DirectedQEquation a = DirectedEquation ScopedExpr a
+
 unquantified :: Equation Expr a -> QEquation a
 unquantified (lhs :=: rhs) =
     go lhs :=: go rhs
@@ -86,29 +86,29 @@ toQEquation (ParsedForall boundVars (lhs :=: rhs)) =
   where
     findVar = (`elemIndex` boundVars)
 
-applyUnifyEnvEqn :: (Show a, Eq a) => UnifyEnv a -> QEquation a -> Equation Expr a
-applyUnifyEnvEqn env (lhs :=: rhs) =
-  applyUnifyEnv env lhs :=: applyUnifyEnv env rhs
+-- applyUnifyEnvEqn :: (Show a, Eq a) => UnifyEnv a -> QEquation a -> Equation Expr a
+-- applyUnifyEnvEqn env (lhs :=: rhs) =
+--   applyUnifyEnv env lhs :=: applyUnifyEnv env rhs
+--
+-- -- | The resulting QEquation should not have any bound variables
+-- specifyQEquation :: (Eq a, Show a) => QEquation a -> Expr a -> Either UnifyError (QEquation a)
+-- specifyQEquation (lhs :=: rhs) e = do
+--   subst <- match lhs e
+--
+--   let doSubst = applyUnifyEnv subst 
+--
+--   pure (unquantified (doSubst lhs :=: doSubst rhs))
 
--- | The resulting QEquation should not have any bound variables
-specifyQEquation :: (Eq a, Show a) => QEquation a -> Expr a -> Either UnifyError (QEquation a)
-specifyQEquation (lhs :=: rhs) e = do
-  subst <- match lhs e
-
-  let doSubst = applyUnifyEnv subst 
-
-  pure (unquantified (doSubst lhs :=: doSubst rhs))
-
-toRewrite :: (Show a, Eq a) => DirectedQEquation a -> Rewrite Expr a
-toRewrite (Dir Fwd eqn) = toFwdRewrite eqn
-toRewrite (Dir Bwd eqn) = toFwdRewrite (flipEqn eqn)
-
-toFwdRewrite :: forall a. (Show a, Eq a) => QEquation a -> Rewrite Expr a
-toFwdRewrite (lhs :=: rhs) = Rewrite go
-  where
-    go :: Expr a -> Maybe (Expr a)
-    go e =
-      case match lhs e of
-        Left {} -> Nothing
-        Right env -> Just $ applyUnifyEnv env rhs
-
+-- untypedToRewrite :: (Show a, Eq a) => DirectedQEquation a -> Rewrite Expr a
+-- untypedToRewrite (Dir Fwd eqn) = toFwdRewrite eqn
+-- untypedToRewrite (Dir Bwd eqn) = toFwdRewrite (flipEqn eqn)
+--
+-- toFwdRewrite :: forall a. (Show a, Eq a) => QEquation a -> Rewrite Expr a
+-- toFwdRewrite (lhs :=: rhs) = Rewrite go
+--   where
+--     go :: Expr a -> Maybe (Expr a)
+--     go e =
+--       case match lhs e of
+--         Left {} -> Nothing
+--         Right env -> Just $ applyUnifyEnv env rhs
+--

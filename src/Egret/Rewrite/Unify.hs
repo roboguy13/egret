@@ -7,64 +7,83 @@ module Egret.Rewrite.Unify
   ,applyUnifyEnv
   ,UnifyEnv
   ,UnifyError(..)
+  -- ,envLookup
   )
   where
 
 import           Bound
 
 import           Egret.Rewrite.Expr
+import           Egret.TypeChecker.Type
+import           Egret.TypeChecker.Expr
+
+import           Egret.Utils
 
 import           Control.Monad.State
 
-newtype UnifyEnv a = UnifyEnv [(Int, Expr a)]
-  deriving (Show, Semigroup, Monoid)
+type UnifyEnv tyenv = BoundSubst tyenv Int
+
+-- newtype UnifyEnv tyenv a = UnifyEnv [(Int, TypedExpr' tyenv a)]
+--   deriving (Show, Semigroup, Monoid)
 
 newtype UnifyError = UnifyError { getUnifyError :: String }
   deriving (Show)
 
-type Unify a = StateT (UnifyEnv a) (Either UnifyError)
+type Unify tyenv a = StateT (UnifyEnv tyenv a) (Either UnifyError)
 
-applyUnifyEnv :: Show a => UnifyEnv a -> ScopedExpr a -> Expr a
+applyUnifyEnv :: UnifyEnv tyenv String -> TypedScopedExpr tyenv String -> TypedExpr tyenv
 applyUnifyEnv env = instantiate go
   where
     go i =
-      case envLookup i env of
-        Just x -> x
-        Nothing -> error $ "applyUnifyEnv: Cannot find " ++ show i ++ " in " ++ show env
+      case boundSubstLookup i env of
+        BoundSubstFound x -> x
+        BoundSubstNotFound {} -> error $ "applyUnifyEnv: Cannot find " ++ show i ++ " in " ++ show env
 
-match :: forall a. (Show a, Eq a) => ScopedExpr a -> Expr a -> Either UnifyError (UnifyEnv a)
-match x0 y0 =
-    flip execStateT mempty $ go (fromScope x0) y0
+match :: forall tyenv. TypeEnv tyenv -> TypedScopedExpr tyenv String -> TypedExpr tyenv -> Either UnifyError (UnifyEnv tyenv String)
+match tyEnv x0 y0 =
+    flip execStateT emptyBoundSubst $ go (fromTypedScope x0) y0
   where
-    go :: Expr (Var Int a) -> Expr a -> Unify a ()
-    go (V (B i)) rhs =
-      gets (envLookup i) >>= \case
-        Just e  -> tryMatch e rhs
-        Nothing -> modify (envInsert i rhs)
+    go :: TypedExpr' tyenv (Var Int String) -> TypedExpr' tyenv String -> Unify tyenv String ()
+    go (TypedV (B i)) rhs =
+      gets (boundSubstLookup i) >>= \case
+        BoundSubstFound e  -> do
+          let ty' = getType tyEnv e
+          tryMatch e rhs
+        BoundSubstNotFound k -> put (k rhs)
 
-    go (V (F x)) (V y) = tryMatch x y
+    go (TypedV (F x)) (TypedV y) = tryMatch x y
 
-    go (App x y) (App x' y') = do
+    go (TypedApp x y) (TypedApp x' y') = do
       go x x'
       go y y'
 
     go e e' = cannotMatch e e'
 
-unifyError :: String -> Unify x r
+requireTypeEq :: Type -> Type -> Either UnifyError ()
+requireTypeEq a b
+  | a == b = pure ()
+  | otherwise = Left $ UnifyError $ "Unify: Cannot match type " ++ show a ++ " with type " ++ show b
+
+requireTypeEqMaybe :: Type -> Type -> Maybe ()
+requireTypeEqMaybe a b
+  | a == b = pure ()
+  | otherwise = Nothing
+
+unifyError :: String -> Unify tyenv x r
 unifyError = lift . Left . UnifyError
 
-cannotMatch :: (Show a, Show b) => a -> b -> Unify x r
+cannotMatch :: (Show a, Show b) => a -> b -> Unify tyenv x r
 cannotMatch x y =
   unifyError $ "Cannot match " ++ show x ++ " with " ++ show y
 
-tryMatch :: (Eq a, Show a) => a -> a -> Unify x ()
+tryMatch :: (Eq a, Show a) => a -> a -> Unify tyenv x ()
 tryMatch x y
   | x == y = pure ()
   | otherwise = cannotMatch x y
 
-envLookup :: Int -> UnifyEnv a -> Maybe (Expr a)
-envLookup i (UnifyEnv env) = lookup i env
-
-envInsert :: Int -> Expr a -> UnifyEnv a -> UnifyEnv a
-envInsert i e (UnifyEnv env) = UnifyEnv ((i, e) : env)
-
+-- envLookup :: Int -> UnifyEnv tyenv a -> Maybe (TypedExpr' tyenv a)
+-- envLookup i (UnifyEnv env) = lookup i env
+--
+-- envInsert :: Int -> TypedExpr' tyenv a -> Type -> UnifyEnv tyenv a -> UnifyEnv tyenv a
+-- envInsert i e ty (UnifyEnv env) = UnifyEnv ((i, e) : env)
+--

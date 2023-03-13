@@ -47,28 +47,28 @@ rewriteFail = Rewrite (const Nothing)
 data At a = At Int a
   deriving (Show, Functor)
 
-rewriteHere :: Rewrite f a -> f a -> Maybe (f a)
-rewriteHere = runRewrite
-
-rewriteThere :: Data (f a) => Rewrite f a -> (f a -> Bool) -> f a -> Maybe (f a)
-rewriteThere re p =
-  rewriteEverywhere go
-  where
-    go = Rewrite $ \x -> do
-      guard (p x)
-      runRewrite re x
-
-rewriteEverywhere :: Data (f a) => Rewrite f a -> f a -> Maybe (f a)
-rewriteEverywhere re fa =
-  case runWriter $ rewriteMOf uniplate go fa of
-    (r, Any True) -> Just r
-    (_, Any False) -> Nothing
-  where
-    go x = do
-      let y = runRewrite re x
-      tell (Any (isJust y))
-      pure y
-
-rewriteEverywhere' :: Data (f a) => Rewrite f a -> f a -> f a
-rewriteEverywhere' re fa = fromMaybe fa (rewriteEverywhere re fa)
-
+-- rewriteHere :: Rewrite f a -> f a -> Maybe (f a)
+-- rewriteHere = runRewrite
+--
+-- rewriteThere :: Data (f a) => Rewrite f a -> (f a -> Bool) -> f a -> Maybe (f a)
+-- rewriteThere re p =
+--   rewriteEverywhere go
+--   where
+--     go = Rewrite $ \x -> do
+--       guard (p x)
+--       runRewrite re x
+--
+-- rewriteEverywhere :: Data (f a) => Rewrite f a -> f a -> Maybe (f a)
+-- rewriteEverywhere re fa =
+--   case runWriter $ rewriteMOf uniplate go fa of
+--     (r, Any True) -> Just r
+--     (_, Any False) -> Nothing
+--   where
+--     go x = do
+--       let y = runRewrite re x
+--       tell (Any (isJust y))
+--       pure y
+--
+-- rewriteEverywhere' :: Data (f a) => Rewrite f a -> f a -> f a
+-- rewriteEverywhere' re fa = fromMaybe fa (rewriteEverywhere re fa)
+--

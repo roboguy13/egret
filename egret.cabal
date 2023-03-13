@@ -45,6 +45,8 @@ executable egret
       Egret.Repl.Command
 
       Egret.Rewrite.Equation
+      Egret.Rewrite.Rewrite
+      Egret.Rewrite.WellTyped
       Egret.Rewrite.Expr
       Egret.Rewrite.Rewrite
       Egret.Rewrite.Path
@@ -53,11 +55,15 @@ executable egret
       Egret.Tactic.Tactic
 
       Egret.TypeChecker.Type
+      Egret.TypeChecker.Equation
+      Egret.TypeChecker.Expr
 
       Egret.Solver.BruteForce
 
+      Egret.Utils
+
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.16.4.0, lens, mtl, megaparsec, containers, pretty, deriving-compat, bound, comonad
+    build-depends:    base ^>=4.16.4.0, lens, mtl, megaparsec, containers, pretty, deriving-compat, bound, comonad, gdp
     hs-source-dirs:   src
     default-language: Haskell2010

@@ -1,18 +1,48 @@
+-- | NOTE: This module strategically avoids exporting certain
+-- definitions to ensure certain invariants always hold
+
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Egret.TypeChecker.Type
   (Type (..)
-  ,TypeEnv
+  ,Typed (..)
+  ,Name
+
   ,TypeSig (..)
-  ,toTypeEnv
-  ,mkAtRewrite
-  ,rewriteAt
-  ,allWellTypedRewrites
-  ,ensureWellTypedRewrite
-  ,typeInferEquation
+  ,TypedExpr'
+  ,TypedExpr
+
+  ,pattern TypedApp
+  ,pattern TypedV
+
+  ,TypeEnv
+
+  ,withTypeSigs
+
+  ,extendTypeEnv
+
+  ,TypedScopedExpr
+  ,fromTypedScope
+
+  ,getType
+
+  ,exprHoles
+
   ,typeInfer
   ,typeCheck
-  ,isWellTyped
+
+  ,BoundSubst
+  ,emptyBoundSubst
+  ,mkBoundSubst
+  ,applyBoundSubst
+  ,BoundSubstResult (..)
+  ,boundSubstLookup
   )
   where
 
@@ -20,7 +50,6 @@ import           Egret.Ppr
 
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Rewrite
-import           Egret.Rewrite.Equation
 
 import           Control.Monad.Reader
 
@@ -29,6 +58,14 @@ import           Control.Comonad.Store
 import           Control.Lens.Plated
 
 import           Control.Applicative
+import           Data.Data
+
+import           Control.Lens.Internal.Context
+
+import           Data.Coerce
+
+import           Bound
+import           Bound.Scope
 
 import Debug.Trace
 
@@ -41,86 +78,152 @@ instance Ppr Type where
   pprDoc (BaseType str) = text str
   pprDoc (FnType a b) = sep [pprDoc a, text "->", pprDoc b]
 
+data Typed a = Typed Type a
+  deriving (Show)
+
+type Name = Typed String
+
+-- | Don't display the type part of a 'Typed'
+instance Ppr a => Ppr (Typed a) where
+  pprDoc (Typed _ x) = pprDoc x
+
 data TypeSig = TypeSig String Type
   deriving (Show)
 
-toTypeEnv :: [TypeSig] -> TypeEnv
-toTypeEnv = map go
+withTypeSigs :: [TypeSig] -> (forall tyenv. TypeEnv tyenv -> r) -> r
+withTypeSigs sigs k = k $ TypeEnv $ map go sigs
   where
     go (TypeSig x y) = (x, y)
 
--- | Well-typed input ==> well-typed output
-ensureWellTypedRewrite :: TypeEnv -> Rewrite Expr String -> Rewrite Expr String
-ensureWellTypedRewrite env re = Rewrite $ \x ->
-  let r = runRewrite re x
-      b1 = not (isWellTyped env x)
-      b2 = or (fmap (isWellTyped env) r)
-  in
-  if b1 || b2
-    -- then trace ("well-typed implication: " ++ show (x, r)) r
-    then r
-    else trace ("not well-typed, " ++ show (b1,b2) ++ ": " ++ show (ppr x, fmap ppr r)) Nothing
+withTypeds :: [Typed String] -> (forall tyenv. TypeEnv tyenv -> r) -> r
+withTypeds bnds k = k $ foldr (flip tcExtend . (:[])) (TypeEnv []) bnds
 
-allWellTypedRewrites :: TypeEnv -> Rewrite Expr String -> Expr String -> [Expr String]
-allWellTypedRewrites typeEnv re fa = 
-  maybeCons (rewriteHere (ensureWellTypedRewrite typeEnv re) fa)
-    $ concatMap (experiment (allWellTypedRewrites typeEnv re)) (holes fa)
+-- -- | Don't export value constructor
+-- data a :< b = TypeEnvContains
 
-mkAtRewrite :: TypeEnv -> At (Rewrite Expr String) -> Rewrite Expr String
-mkAtRewrite env = Rewrite . rewriteAt env
+data a :> b
 
-rewriteAt :: TypeEnv -> At (Rewrite Expr String) -> Expr String -> Maybe (Expr String)
-rewriteAt env (At ix0 re) x =
-    let res = allWellTypedRewrites env re x
-    in
-    traceShow (take 30 res) $ go ix0 res
+extendTypeEnv :: [Typed String] -> TypeEnv tyenv -> (forall tyenv2. TypeEnv tyenv2 -> r) -> r
+extendTypeEnv bnds env k = k (tcExtend env bnds)
+
+-- disjointTypeEnvExtend :: TypeEnv tyenv1 -> TypeEnv tyenv2 -> Maybe (TypeEnv tyenv2, tyenv :< tyenv2)
+-- disjointTypeEnvExtend = undefined
+
+newtype TypeEnv' tyenv a = TypeEnv [(a, Type)]
+
+type TypeEnv tyenv = TypeEnv' tyenv String
+
+tcLookup :: Eq a => a -> TypeEnv' tyenv a -> Maybe Type
+tcLookup v (TypeEnv env) = lookup v env
+
+tcExtend :: TypeEnv' tyenv a -> [Typed a] -> TypeEnv' tyenv2 a
+tcExtend (TypeEnv env) = TypeEnv . go
   where
-    go _ [] = Nothing
-    go 0 (x:_) = Just x
-    go ix (_:xs) = go (ix-1) xs
+    go [] = env
+    go (Typed ty x : rest) = (x, ty) : go rest
+
+-- disjointTcExtend :: TypeEnv tyenv -> [Typed String] -> Maybe (TypeEnv tyenv2, tyenv :< tyenv2)
+-- disjointTcExtend env = undefined
 
 
--- allRewrites :: Plated (f a) => Rewrite f a -> f a -> [f a]
--- allRewrites re fa =
---   maybeCons (rewriteHere re fa)
---     $ concatMap (experiment (allRewrites re)) (holes fa)
-
-maybeCons :: Maybe a -> [a] -> [a]
-maybeCons Nothing xs = xs
-maybeCons (Just x) xs = x : xs
-
-type TypeEnv = [(String, Type)]
-
-type TypeCheck = ReaderT TypeEnv (Either String)
-
-typeInferEquation :: TypeEnv -> Equation Expr String -> Either String Type
-typeInferEquation env (lhs0 :=: rhs0) =
-  go (lhs0 :=: rhs0) <|> go (rhs0 :=: lhs0)
-  where
-    go (lhs :=: rhs) =
-      typeCheck env rhs =<< typeInfer env lhs
+type TypeCheck tyenv b = ReaderT (TypeEnv' tyenv b) (Either String)
 
 errorExpected :: String -> String -> Either String a
 errorExpected expected found =
   Left $ "Expected " ++ expected ++ ", found " ++ found
 
-isWellTyped :: TypeEnv -> Expr String -> Bool
-isWellTyped env (V a) = True
-isWellTyped env e =
-  case typeInfer env e of
-    Left {} -> False
-    Right {} -> True
+-- | By strategic exporting, we ensure that this will never fail
+getType :: TypeEnv tyenv -> TypedExpr tyenv -> Type
+getType env (TypedExpr e) =
+  let Right (ty, _) = typeInfer env e
+  in
+  ty
 
-typeInfer :: TypeEnv -> Expr String -> Either String Type
-typeInfer env e = runReaderT (typeInfer' e) env
+typedExpr :: TypeEnv tyenv -> Expr String -> Either String (TypedExpr tyenv)
+typedExpr env = fmap snd . typeInfer env
 
-typeCheck :: TypeEnv -> Expr String -> Type -> Either String Type
-typeCheck env e ty = runReaderT (typeCheck' e ty) env
+exprHoles :: forall tyenv.
+  TypedExpr tyenv -> [Pretext (->) (TypedExpr tyenv) (TypedExpr tyenv) (TypedExpr tyenv)]
+exprHoles = map coerce' . holes . coerce
+  where
+    coerce' :: Pretext (->) (Expr String) (Expr String) (Expr String) -> Pretext (->) (TypedExpr tyenv) (TypedExpr tyenv) (TypedExpr tyenv)
+    coerce' p = Pretext $ coerce'' $ runPretext p
 
-typeInfer' :: Expr String -> TypeCheck Type
+    coerce'' :: (forall f. Functor f => (->) (Expr String) (f (Expr String)) -> f (Expr String)) -> (forall f. Functor f => (->) (TypedExpr tyenv) (f (TypedExpr tyenv)) -> f (TypedExpr tyenv))
+    coerce'' f g = TypedExpr <$> f (fmap getTypedExpr . g . TypedExpr)
+
+-- | Do not export the value constructor
+newtype TypedExpr' tyenv a = TypedExpr { getTypedExpr :: Expr a }
+  deriving (Show, Eq)
+type TypedExpr tyenv = TypedExpr' tyenv String
+
+
+-- | We can pattern match on an well-typed 'App' to
+-- get two well-typed 'App's (all under the same typing environment).
+pattern TypedApp :: TypedExpr' tyenv a -> TypedExpr' tyenv a -> TypedExpr' tyenv a
+pattern TypedApp x y <- TypedExpr (App (TypedExpr -> x) (TypedExpr -> y))
+
+-- | Unidirectional for safety
+pattern TypedV :: a -> TypedExpr' tyenv a
+pattern TypedV x <- TypedExpr (V x)
+
+type TypedScopedExpr tyenv = Scope Int (TypedExpr' tyenv)
+
+fromTypedScope :: forall tyenv a. TypedScopedExpr tyenv a -> TypedExpr' tyenv (Var Int a)
+fromTypedScope = TypedExpr . fromScope . coerce
+
+
+newtype BoundSubst tyenv b a = BoundSubst [(b, TypedExpr' tyenv a)]
+  deriving (Show)
+
+emptyBoundSubst :: BoundSubst tyenv b a
+emptyBoundSubst = BoundSubst []
+
+applyBoundSubst :: Show a => BoundSubst tyenv Int a -> TypedScopedExpr tyenv a -> TypedExpr' tyenv a
+applyBoundSubst env = TypedExpr . instantiate go . coerce
+  where
+    go i =
+      case boundSubstLookup i env of
+        BoundSubstFound x -> getTypedExpr x
+        BoundSubstNotFound {} -> error $ "applyBoundSubst: Cannot find " ++ show i ++ " in " ++ show env
+
+-- | Either we find it or we can safely insert it
+data BoundSubstResult tyenv b a
+  = BoundSubstFound (TypedExpr' tyenv a)
+  | BoundSubstNotFound (TypedExpr' tyenv a -> BoundSubst tyenv b a)
+
+boundSubstLookup :: Eq b => b -> BoundSubst tyenv b a -> BoundSubstResult tyenv b a
+boundSubstLookup x (BoundSubst subst) =
+  case lookup x subst of
+    Nothing -> BoundSubstNotFound $ \e -> BoundSubst ((x, e) : subst)
+    Just r -> BoundSubstFound r
+
+mkBoundSubst :: (Eq a, Show a, Eq b, Show b) => TypeEnv' tyenv (Var b a) -> [(b, Expr a)] -> Maybe (BoundSubst tyenv b a)
+mkBoundSubst tcEnv bnds =
+        -- We temporarily wrap each variables in an 'F'...
+    case traverse (go . fmap (fmap F)) bnds of
+      Left {} -> Nothing
+      Right bnds' -> Just $ BoundSubst bnds'
+  where
+    go (v, e) = do
+      (ty, _) <- typeInfer tcEnv (V (B v))
+      (_, TypedExpr e') <- typeCheck tcEnv e ty
+        -- ... then remove the 'F's. This is safe since we put them
+        -- everywhere to start with
+      pure (v, TypedExpr (fmap unF e'))
+
+    unF (F x) = x
+
+typeInfer :: (Eq a, Show a) => TypeEnv' tyenv a -> Expr a -> Either String (Type, TypedExpr' tyenv a)
+typeInfer env e = (,TypedExpr e) <$> runReaderT (typeInfer' e) env
+
+typeCheck :: (Eq a) => TypeEnv' tyenv a -> Expr a -> Type -> Either String (Type, TypedExpr' tyenv a)
+typeCheck env e ty = (,TypedExpr e) <$> runReaderT (typeCheck' e ty) env
+
+typeInfer' :: (Show a, Eq a) => Expr a -> TypeCheck tyenv a Type
 typeInfer' (V a) =
-  asks (lookup a) >>= \case
-    Nothing -> lift $ Left $ "typeInfer': Cannot find variable " ++ a
+  asks (tcLookup a) >>= \case
+    Nothing -> lift $ Left $ "typeInfer': Cannot find variable " ++ show a
     Just ty -> pure ty
 typeInfer' (App f x) = do
   typeInfer' f >>= \case
@@ -129,9 +232,9 @@ typeInfer' (App f x) = do
       pure b
     fTy -> lift $ errorExpected "function type" (ppr fTy)
 
-typeCheck' :: Expr String -> Type -> TypeCheck Type
+typeCheck' :: Eq a => Expr a -> Type -> TypeCheck tyenv a Type
 typeCheck' (V a) ty =
-  asks (lookup a) >>= \case
+  asks (tcLookup a) >>= \case
     Nothing -> pure ty
     Just ty'
       | ty' == ty -> pure ty
