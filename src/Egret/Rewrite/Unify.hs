@@ -1,10 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Egret.Rewrite.Unify
   (match
-  ,applyUnifyEnv
   ,UnifyEnv
   ,UnifyError(..)
   -- ,envLookup
@@ -23,21 +21,10 @@ import           Control.Monad.State
 
 type UnifyEnv tyenv = BoundSubst tyenv Int
 
--- newtype UnifyEnv tyenv a = UnifyEnv [(Int, TypedExpr' tyenv a)]
---   deriving (Show, Semigroup, Monoid)
-
 newtype UnifyError = UnifyError { getUnifyError :: String }
   deriving (Show)
 
 type Unify tyenv a = StateT (UnifyEnv tyenv a) (Either UnifyError)
-
-applyUnifyEnv :: UnifyEnv tyenv String -> TypedScopedExpr tyenv String -> TypedExpr tyenv
-applyUnifyEnv env = instantiate go
-  where
-    go i =
-      case boundSubstLookup i env of
-        BoundSubstFound x -> x
-        BoundSubstNotFound {} -> error $ "applyUnifyEnv: Cannot find " ++ show i ++ " in " ++ show env
 
 match :: forall tyenv. TypeEnv tyenv -> TypedScopedExpr tyenv String -> TypedExpr tyenv -> Either UnifyError (UnifyEnv tyenv String)
 match tyEnv x0 y0 =
@@ -81,9 +68,3 @@ tryMatch x y
   | x == y = pure ()
   | otherwise = cannotMatch x y
 
--- envLookup :: Int -> UnifyEnv tyenv a -> Maybe (TypedExpr' tyenv a)
--- envLookup i (UnifyEnv env) = lookup i env
---
--- envInsert :: Int -> TypedExpr' tyenv a -> Type -> UnifyEnv tyenv a -> UnifyEnv tyenv a
--- envInsert i e ty (UnifyEnv env) = UnifyEnv ((i, e) : env)
---

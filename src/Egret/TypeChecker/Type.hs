@@ -8,6 +8,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Egret.TypeChecker.Type
   (Type (..)
@@ -21,6 +22,7 @@ module Egret.TypeChecker.Type
   ,pattern TypedApp
   ,pattern TypedV
 
+  ,TypeEnv'
   ,TypeEnv
 
   ,withTypeSigs
@@ -31,9 +33,12 @@ module Egret.TypeChecker.Type
   ,fromTypedScope
 
   ,getType
+  ,unTyped
 
   ,exprHoles
 
+  ,typeInferScoped
+  ,typeCheckScoped
   ,typeInfer
   ,typeCheck
 
@@ -79,7 +84,10 @@ instance Ppr Type where
   pprDoc (FnType a b) = sep [pprDoc a, text "->", pprDoc b]
 
 data Typed a = Typed Type a
-  deriving (Show)
+  deriving (Show, Functor)
+
+unTyped :: Typed a -> a
+unTyped (Typed _ a) = a
 
 type Name = Typed String
 
@@ -213,6 +221,20 @@ mkBoundSubst tcEnv bnds =
       pure (v, TypedExpr (fmap unF e'))
 
     unF (F x) = x
+
+typeInferScoped :: forall tyenv a b. (Eq a, Show a, Eq b, Show b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Either String (Type, Scope b (TypedExpr' tyenv) a)
+typeInferScoped tcEnv sc =
+    fmap (coerce' . toScope . getTypedExpr) <$> typeInfer tcEnv (fromScope sc)
+  where
+    coerce' :: Scope b Expr a -> Scope b (TypedExpr' tyenv) a
+    coerce' = coerce
+
+typeCheckScoped :: (Eq a, Eq b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Type -> Either String (Type, Scope b (TypedExpr' tyenv) a)
+typeCheckScoped tcEnv sc ty =
+    fmap (coerce' . toScope . getTypedExpr) <$> typeCheck tcEnv (fromScope sc) ty
+  where
+    coerce' :: Scope b Expr a -> Scope b (TypedExpr' tyenv) a
+    coerce' = coerce
 
 typeInfer :: (Eq a, Show a) => TypeEnv' tyenv a -> Expr a -> Either String (Type, TypedExpr' tyenv a)
 typeInfer env e = (,TypedExpr e) <$> runReaderT (typeInfer' e) env

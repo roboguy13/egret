@@ -4,7 +4,7 @@ module Egret.TypeChecker.Equation
   (typeInferEquation
   ,TypedQEquation
   ,TypedDirectedQEquation
-  ,toRewrite
+  -- ,toRewrite
   )
   where
 
@@ -25,19 +25,36 @@ import           Control.Monad
 import           Bound.Scope
 import           Bound
 
-typeInferEquation :: TypeEnv tyenv -> Equation Expr String -> Either String (Type, Equation (TypedExpr' tyenv) String)
+typeInferEquation :: forall tyenv a. (Eq a, Show a) => TypeEnv' tyenv a -> Equation Expr a -> Either String (Type, Equation (TypedExpr' tyenv) a)
 typeInferEquation env (lhs0 :=: rhs0) =
-  go (lhs0 :=: rhs0) <|> go (rhs0 :=: lhs0)
+  go (lhs0 :=: rhs0) <|> fmap (fmap flipEqn) (go (rhs0 :=: lhs0))
   where
-    go (lhs :=: rhs) =
-      typeCheck env rhs =<< typeInfer env lhs
+    go :: Equation Expr a -> Either String (Type, Equation (TypedExpr' tyenv) a)
+    go (lhs :=: rhs) = do
+      (ty, lhs') <- typeInfer env lhs
+      (_, rhs') <- typeCheck env rhs ty
+      pure (ty, lhs' :=: rhs')
+
+typeInferQEquation :: forall tyenv. TypeEnv' tyenv (Var Int String) -> QEquation String -> Either String (Type, TypedQEquation tyenv)
+typeInferQEquation env (lhs0 :=: rhs0) =
+  go (lhs0 :=: rhs0) <|> fmap (fmap flipEqn) (go (rhs0 :=: lhs0))
+  where
+    -- go :: Equation Expr a -> Either String (Type, Equation (TypedExpr' tyenv) a)
+    go (lhs :=: rhs) = do
+      (ty, lhs') <- typeInferScoped env lhs
+      (_, rhs') <- typeCheckScoped env rhs ty
+      pure (ty, lhs' :=: rhs')
 
 type TypedQEquation         tyenv = Equation         (TypedScopedExpr tyenv) String
 type TypedDirectedQEquation tyenv = DirectedEquation (TypedScopedExpr tyenv) String
--- -- applyTypedUnifyEnv :: forall a. UnifyEnv a -> TypedScopedExpr a -> Maybe (Expr a)
--- -- applyTypedUnifyEnv env = joinedTraverseScope go
--- --   where
--- --     go (Typed ty i) =
--- --       case envLookup i env of
--- --         Just x -> undefined
---
+
+toTypedQEquation :: TypeEnv' tyenv (Var Int String) -> ParsedForall String -> Either String (TypedQEquation tyenv)
+toTypedQEquation tcEnv =
+  fmap snd . typeInferQEquation tcEnv . toQEquation
+
+-- toQEquation :: Eq a => ParsedForall a -> QEquation a
+-- toQEquation (ParsedForall boundVars (lhs :=: rhs)) =
+--     abstract findVar lhs :=: abstract findVar rhs
+--   where
+--     findVar x = x `elemIndex` map unTyped boundVars
+

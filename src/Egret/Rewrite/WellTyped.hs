@@ -7,6 +7,7 @@ module Egret.Rewrite.WellTyped
   ,At (..)
     -- * Constructing 'WellTypedRewrite's
   ,qequationToRewrite
+  ,toRewrite
     -- * Using 'WellTypedRewrite's
   ,rewriteHere
   ,allRewrites
@@ -19,6 +20,7 @@ import           Egret.Rewrite.Rewrite hiding (rewriteFail, options)
 import qualified Egret.Rewrite.Rewrite as Rewrite
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
+import           Egret.Rewrite.Unify
 
 import           Egret.TypeChecker.Type
 import           Egret.TypeChecker.Equation
@@ -69,38 +71,24 @@ rewriteAt (At ix0 re) x =
     go 0 (x:_) = Just x
     go ix (_:xs) = go (ix-1) xs
 
--- -- | Well-typed input ==> well-typed output
--- ensureWellTypedRewrite :: TypeEnv tyenv -> Rewrite Expr String -> WellTypedRewrite
--- ensureWellTypedRewrite env re = WellTypedRewrite . Rewrite $ \x ->
---   let r = runRewrite re x
---       b1 = not (isWellTyped env x)
---       b2 = or (fmap (isWellTyped env) r)
---   in
---   if b1 || b2
---     -- then trace ("well-typed implication: " ++ show (x, r)) r
---     then r
---     else Nothing
---     -- else trace ("not well-typed, " ++ show (b1,b2) ++ ": " ++ show (ppr x, fmap ppr r)) Nothing
-
-toRewrite :: TypeEnv -> TypedDirectedQEquation -> WellTypedRewrite
+toRewrite :: TypeEnv tyenv -> TypedDirectedQEquation tyenv -> WellTypedRewrite tyenv
 toRewrite env (Dir Fwd eqn) = toFwdRewrite env eqn
 toRewrite env (Dir Bwd eqn) = toFwdRewrite env (flipEqn eqn)
 
-toFwdRewrite :: TypeEnv -> TypedQEquation -> WellTypedRewrite
-toFwdRewrite env (lhs :=: rhs) = ensureWellTypedRewrite env $ Rewrite go
+toFwdRewrite :: forall tyenv. TypeEnv tyenv -> TypedQEquation tyenv -> WellTypedRewrite tyenv
+toFwdRewrite env (lhs :=: rhs) = WellTypedRewrite $ Rewrite go
   where
+    go :: TypedExpr' tyenv String -> Maybe (TypedExpr' tyenv String)
     go e =
-      case match lhs e of
+      case match env lhs e of
         Left {} -> Nothing
-        Right unifyEnv -> applyUnifyEnv unifyEnv rhs
+        Right unifyEnv -> Just $ applyBoundSubst unifyEnv rhs
 
--- | Precondition: 'UnifyEnv' is valid: Variable names occur
--- at most once in it.
-applyTypedUnifyEnvEqn :: UnifyEnv String -> TypedQEquation -> Maybe (Equation Expr String)
-applyTypedUnifyEnvEqn env (lhs :=: rhs) =
-  liftA2 (:=:)
-    (applyUnifyEnv env lhs) 
-    (applyUnifyEnv env rhs)
+-- applySubstEqn :: BoundSubst tyenv String -> TypedQEquation -> Maybe (Equation Expr String)
+-- applySubstEqn env (lhs :=: rhs) =
+--   liftA2 (:=:)
+--     (applyUnifyEnv env lhs) 
+--     (applyUnifyEnv env rhs)
 
 
 

@@ -37,6 +37,7 @@ import           Data.List
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Rewrite
 import           Egret.Rewrite.Unify
+import           Egret.TypeChecker.Type
 
 data Equation f a = f a :=: f a
   deriving (Functor, Show)
@@ -49,7 +50,7 @@ flipEqn :: Equation f a -> Equation f a
 flipEqn (lhs :=: rhs) = rhs :=: lhs
 
 data ParsedForall a =
-  ParsedForall [a] (Equation Expr a)
+  ParsedForall [Typed a] (Equation Expr a)
   deriving (Functor, Show)
 
 type EquationDB a = [(String, ParsedForall a)]
@@ -84,7 +85,7 @@ toQEquation :: Eq a => ParsedForall a -> QEquation a
 toQEquation (ParsedForall boundVars (lhs :=: rhs)) =
     abstract findVar lhs :=: abstract findVar rhs
   where
-    findVar = (`elemIndex` boundVars)
+    findVar x = x `elemIndex` map unTyped boundVars
 
 -- applyUnifyEnvEqn :: (Show a, Eq a) => UnifyEnv a -> QEquation a -> Equation Expr a
 -- applyUnifyEnvEqn env (lhs :=: rhs) =

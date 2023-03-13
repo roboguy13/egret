@@ -13,11 +13,13 @@ module Egret.Tactic.Tactic
   where
 
 import           Egret.Rewrite.Rewrite
+import           Egret.Rewrite.WellTyped
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Equation
 import           Egret.Rewrite.Unify
 
 import           Egret.TypeChecker.Type
+import           Egret.TypeChecker.Equation
 
 import           Egret.Proof.Goal
 
@@ -48,12 +50,12 @@ tacticName :: Tactic a -> a
 tacticName (BasicTactic x) = basicTacticName x
 tacticName (AtTactic (At _ x)) = basicTacticName x
 
-tacticToRewrite :: TypeEnv -> EquationDB String -> Tactic String -> Either String (Rewrite Expr String)
+tacticToRewrite :: TypeEnv tyenv -> EquationDB String -> Tactic String -> Either String (WellTypedRewrite tyenv)
 tacticToRewrite typeEnv eqnDb (AtTactic (At ix tactic)) =
-  mkAtRewrite typeEnv . At ix . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+  mkAtRewrite typeEnv . At ix <$> basicTacticToDirectedQEquation eqnDb tactic
 
 tacticToRewrite typeEnv eqnDb (BasicTactic tactic) =
-  ensureWellTypedRewrite typeEnv . toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
+  toRewrite <$> basicTacticToDirectedQEquation eqnDb tactic
 
 basicTacticToDirectedQEquation :: EquationDB String -> BasicTactic String -> Either String (DirectedQEquation String)
 basicTacticToDirectedQEquation eqnDb (RewriteTactic' dir name) =
@@ -72,11 +74,11 @@ basicTacticToDirectedQEquation eqnDb (UsingReplaceTactic' name givenEqn) =
         Nothing -> Left $ "Equation {" ++ name ++ "} does not apply"
         Just r -> Right r
 
-bwdUsingReplace :: ParsedForall String -> Equation Expr String -> Maybe (DirectedQEquation String)
+bwdUsingReplace :: ParsedForall String -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
 bwdUsingReplace def givenEqn =
   flipDirected <$> fwdUsingReplace def (flipEqn givenEqn)
 
-fwdUsingReplace :: ParsedForall String -> Equation Expr String -> Maybe (DirectedQEquation String)
+fwdUsingReplace :: ParsedForall String -> Equation (TypedExpr' tyenv) String -> Maybe (TypedDirectedQEquation tyenv)
 fwdUsingReplace defn givenEqn@(givenLhs :=: givenRhs) =
   case go of
     Left {} -> Nothing
