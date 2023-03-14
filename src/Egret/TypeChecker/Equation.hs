@@ -39,8 +39,8 @@ typeInferEquation env (lhs0 :=: rhs0) =
   where
     go :: Equation Expr a -> Either String (Type, Equation (TypedExpr' tyenv) a)
     go (lhs :=: rhs) = do
-      (ty, lhs') <- typeInfer env lhs
-      (_, rhs') <- typeCheck env rhs ty
+      (ty, _, lhs') <- typeInfer env lhs
+      (_, _, rhs') <- typeCheck env rhs ty
       pure (ty, lhs' :=: rhs')
 
 typeInferQEquation :: forall tyenv. TypeEnv' tyenv (Var Int String) -> QEquation String -> Either String (Type, TypedQEquation tyenv)
@@ -49,8 +49,8 @@ typeInferQEquation env (lhs0 :=: rhs0) =
   where
     -- go :: Equation Expr a -> Either String (Type, Equation (TypedExpr' tyenv) a)
     go (lhs :=: rhs) = do
-      (ty, lhs') <- typeInferScoped env lhs
-      (_, rhs') <- typeCheckScoped env rhs ty
+      (ty, _, lhs') <- typeInferScoped env lhs
+      (_, _, rhs') <- typeCheckScoped env rhs ty
       pure (ty, lhs' :=: rhs')
 
 type TypedQEquation'         tyenv = Equation         (TypedScopedExpr tyenv)

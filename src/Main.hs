@@ -38,9 +38,16 @@ main = do
     hFlush stdout
     initialGoal <- requiredParseIO "<stdin>" parseExpr =<< getLine
 
-    (_, initialGoal') <- runChecked $ typeInfer tcEnv initialGoal
+    (_, extendedTcEnv, initialGoal') <- runChecked $ typeInfer tcEnv initialGoal
 
-    runProofM tcEnv ruleDb' initialGoal' repl
+    runTypeEnvExtended extendedTcEnv $ \tcEnvIncl tcEnv' -> do
+
+        -- TODO: Use the TyEnv inclusion so that we don't need to type
+        -- check again
+      ruleDb'' <- runChecked $ checkEquationDb tcEnv' ruleDb
+      (_, _, initialGoal'') <- runChecked $ typeInfer tcEnv' initialGoal
+
+      runProofM tcEnv' ruleDb'' initialGoal'' repl
 
 getRuleFileName :: IO String
 getRuleFileName =

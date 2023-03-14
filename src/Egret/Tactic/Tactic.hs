@@ -52,10 +52,10 @@ tacticName (AtTactic (At _ x)) = basicTacticName x
 
 tacticToRewrite :: TypeEnv tyenv -> TypedEquationDB tyenv -> Tactic String -> Either String (WellTypedRewrite tyenv)
 tacticToRewrite tcEnv eqnDb (AtTactic (At ix tactic)) =
-  mkAtRewrite . At ix . qequationToRewrite <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
+  mkAtRewrite . At ix . qequationToRewrite tcEnv <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
 
 tacticToRewrite tcEnv eqnDb (BasicTactic tactic) =
-  qequationToRewrite <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
+  qequationToRewrite tcEnv <$> basicTacticToDirectedQEquation tcEnv eqnDb tactic
 
 basicTacticToDirectedQEquation :: TypeEnv tyenv -> TypedEquationDB tyenv -> BasicTactic String -> Either String (TypedDirectedQEquation tyenv)
 basicTacticToDirectedQEquation tcEnv eqnDb (RewriteTactic' dir name) =

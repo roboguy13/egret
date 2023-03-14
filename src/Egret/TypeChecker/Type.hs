@@ -9,6 +9,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures, DataKinds #-}
 
 module Egret.TypeChecker.Type
   (Type (..)
@@ -29,6 +31,11 @@ module Egret.TypeChecker.Type
 
   ,extendTypeEnv
   ,localTypeEnv
+
+  ,TypeEnvExtended
+  ,(:<=)
+  ,toExtended
+  ,runTypeEnvExtended
 
   ,TypedScopedExpr
   ,fromTypedScope
@@ -61,7 +68,7 @@ import           Control.Arrow (first)
 import           Egret.Rewrite.Expr
 import           Egret.Rewrite.Rewrite
 
-import           Control.Monad.Reader
+import           Control.Monad.State
 
 import           Control.Comonad.Store
 
@@ -122,10 +129,24 @@ extendTypeEnv bnds env k = k (tcExtend env bnds)
 -- disjointTypeEnvExtend :: TypeEnv tyenv1 -> TypeEnv tyenv2 -> Maybe (TypeEnv tyenv2, tyenv :< tyenv2)
 -- disjointTypeEnvExtend = undefined
 
-newtype TypeEnv' tyenv a = TypeEnv [(a, Type)]
+newtype TypeEnv' (tyenv :: TyEnv) a = TypeEnv [(a, Type)]
   deriving (Show)
 
+data TyEnv
+
 type TypeEnv tyenv = TypeEnv' tyenv String
+
+data TypeEnvExtended tyenv a r = TypeEnvExtended ((forall tyenv2. tyenv :<= tyenv2 -> TypeEnv' tyenv2 a -> r) -> r)
+
+runTypeEnvExtended :: TypeEnvExtended tyenv a r -> (forall tyenv2. tyenv :<= tyenv2 -> TypeEnv' tyenv2 a -> r) -> r
+runTypeEnvExtended (TypeEnvExtended k) = k
+
+-- | Don't export the value constructor
+data (a :: TyEnv) :<= (b :: TyEnv) = TyEnvIncl
+  deriving (Show)
+
+toExtended :: tyenv :<= tyenv2 -> TypeEnv' tyenv1 a -> TypeEnv' tyenv2 a
+toExtended TyEnvIncl (TypeEnv env) = TypeEnv env
 
 tcLookup :: Eq a => a -> TypeEnv' tyenv a -> Maybe Type
 tcLookup v (TypeEnv env) = lookup v env
@@ -140,7 +161,8 @@ tcExtend (TypeEnv env) = TypeEnv . go
 -- disjointTcExtend env = undefined
 
 
-type TypeCheck tyenv b = ReaderT (TypeEnv' tyenv b) (Either String)
+newtype TypeCheck tyenv b a = TypeCheck { getTypeCheck :: StateT (TypeEnv' tyenv b) (Either String) a }
+  deriving (Functor, Applicative, Monad, MonadState (TypeEnv' tyenv b))
 
 errorExpected :: Ppr b => String -> String -> b -> Either String a
 errorExpected expected found inExpr =
@@ -149,12 +171,12 @@ errorExpected expected found inExpr =
 -- | By strategic exporting, we ensure that this will never fail
 getType :: TypeEnv tyenv -> TypedExpr tyenv -> Type
 getType env (TypedExpr e) =
-  let Right (ty, _) = typeInfer env e
+  let Right (ty, _, _) = typeInfer env e
   in
   ty
 
 typedExpr :: TypeEnv tyenv -> Expr String -> Either String (TypedExpr tyenv)
-typedExpr env = fmap snd . typeInfer env
+typedExpr env = fmap (\(_, _, x) -> x) . typeInfer env
 
 exprHoles :: forall tyenv.
   TypedExpr tyenv -> [Pretext (->) (TypedExpr tyenv) (TypedExpr tyenv) (TypedExpr tyenv)]
@@ -167,7 +189,7 @@ exprHoles = map coerce' . holes . coerce
     coerce'' f g = TypedExpr <$> f (fmap getTypedExpr . g . TypedExpr)
 
 -- | Do not export the value constructor
-newtype TypedExpr' tyenv a = TypedExpr { getTypedExpr :: Expr a }
+newtype TypedExpr' (tyenv :: TyEnv) a = TypedExpr { getTypedExpr :: Expr a }
   deriving (Show, Eq)
 type TypedExpr tyenv = TypedExpr' tyenv String
 
@@ -190,7 +212,7 @@ fromTypedScope :: forall tyenv a. TypedScopedExpr tyenv a -> TypedExpr' tyenv (V
 fromTypedScope = TypedExpr . fromScope . coerce
 
 
-newtype BoundSubst tyenv b a = BoundSubst [(b, TypedExpr' tyenv a)]
+newtype BoundSubst (tyenv :: TyEnv) b a = BoundSubst [(b, TypedExpr' tyenv a)]
   deriving (Show)
 
 emptyBoundSubst :: BoundSubst tyenv b a
@@ -223,8 +245,9 @@ mkBoundSubst tcEnv bnds =
       Right bnds' -> Just $ BoundSubst bnds'
   where
     go (v, e) = do
-      (ty, _) <- typeInfer tcEnv (V (B v))
-      (_, TypedExpr e') <- typeCheck tcEnv e ty
+        -- TODO: Should this make use of the extended environments?
+      (ty, _, _) <- typeInfer tcEnv (V (B v))
+      (_, _, TypedExpr e') <- typeCheck tcEnv e ty
         -- ... then remove the 'F's. This is safe since we put them
         -- everywhere to start with
       pure (v, TypedExpr (fmap unF e'))
@@ -242,45 +265,49 @@ localTypeEnv (TypeEnv tcEnv) boundTys =
   where
     go (Typed ty x) = (B x, ty)
 
-typeInferScoped :: forall tyenv a b. (Eq a, Show a, Eq b, Show b, Ppr a, Ppr b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Either String (Type, Scope b (TypedExpr' tyenv) a)
+typeInferScoped :: forall tyenv a b r. (Eq a, Show a, Eq b, Show b, Ppr a, Ppr b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Either String (Type, TypeEnvExtended tyenv (Var b a) r, Scope b (TypedExpr' tyenv) a)
 typeInferScoped tcEnv sc =
     fmap (coerce' . toScope . getTypedExpr) <$> typeInfer tcEnv (fromScope sc)
   where
     coerce' :: Scope b Expr a -> Scope b (TypedExpr' tyenv) a
     coerce' = coerce
 
-typeCheckScoped :: (Eq a, Eq b, Ppr a, Ppr b, Show a, Show b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Type -> Either String (Type, Scope b (TypedExpr' tyenv) a)
+typeCheckScoped :: (Eq a, Eq b, Ppr a, Ppr b, Show a, Show b) => TypeEnv' tyenv (Var b a) -> Scope b Expr a -> Type -> Either String (Type, TypeEnvExtended tyenv (Var b a) r, Scope b (TypedExpr' tyenv) a)
 typeCheckScoped tcEnv sc ty =
     fmap (coerce' . toScope . getTypedExpr) <$> typeCheck tcEnv (fromScope sc) ty
   where
     coerce' :: Scope b Expr a -> Scope b (TypedExpr' tyenv) a
     coerce' = coerce
 
-typeInfer :: (Eq a, Show a, Ppr a) => TypeEnv' tyenv a -> Expr a -> Either String (Type, TypedExpr' tyenv a)
-typeInfer env e = (,TypedExpr e) <$> runReaderT (typeInfer' e) env
+typeInfer :: (Eq a, Show a, Ppr a) => TypeEnv' tyenv a -> Expr a -> Either String (Type, TypeEnvExtended tyenv a r, TypedExpr' tyenv a)
+typeInfer env e = do
+    (ty, extendedEnv) <- runStateT (getTypeCheck (typeInfer' e)) env
+    pure (ty, TypeEnvExtended (\f -> f TyEnvIncl extendedEnv), TypedExpr e)
 
-typeCheck :: (Eq a, Ppr a, Show a) => TypeEnv' tyenv a -> Expr a -> Type -> Either String (Type, TypedExpr' tyenv a)
-typeCheck env e ty = (,TypedExpr e) <$> runReaderT (typeCheck' e ty) env
+typeCheck :: (Eq a, Ppr a, Show a) => TypeEnv' tyenv a -> Expr a -> Type -> Either String (Type, TypeEnvExtended tyenv a r, TypedExpr' tyenv a)
+typeCheck env e ty = do
+    (ty, extendedEnv) <- runStateT (getTypeCheck (typeCheck' e ty)) env
+    pure (ty, TypeEnvExtended (\f -> f TyEnvIncl extendedEnv), TypedExpr e)
 
 typeInfer' :: (Show a, Eq a, Ppr a) => Expr a -> TypeCheck tyenv a Type
 typeInfer' (V a) =
-  asks (tcLookup a) >>= \case
-    Nothing -> lift $ Left $ "typeInfer': Cannot find variable " ++ show a
+  gets (tcLookup a) >>= \case
+    Nothing -> TypeCheck . lift . Left $ "typeInfer': Cannot find variable " ++ show a
     Just ty -> pure ty
 typeInfer' e0@(App f x) = do
   typeInfer' f >>= \case
     FnType a b -> do
       typeCheck' x a
       pure b
-    fTy -> lift $ errorExpected "function type" (ppr fTy) e0
+    fTy -> TypeCheck . lift $ errorExpected "function type" (ppr fTy) e0
 
 typeCheck' :: (Eq a, Ppr a, Show a) => Expr a -> Type -> TypeCheck tyenv a Type
 typeCheck' e0@(V a) ty =
-  asks (tcLookup a) >>= \case
-    Nothing -> pure ty
+  gets (tcLookup a) >>= \case
+    Nothing -> modify (`tcExtend` [Typed ty a]) $> ty
     Just ty'
       | ty' == ty -> pure ty
-      | otherwise -> lift $ errorExpected (ppr ty) (ppr ty') e0
+      | otherwise -> TypeCheck . lift $ errorExpected (ppr ty) (ppr ty') e0
 
 typeCheck' e0@(App f x) ty =
   typeInfer' f >>= \case
@@ -288,11 +315,11 @@ typeCheck' e0@(App f x) ty =
       typeCheck' x a
       ensureTypeMatch b ty e0
       pure b
-    fTy -> lift $ errorExpected "function type" (ppr fTy) f
+    fTy -> TypeCheck . lift $ errorExpected "function type" (ppr fTy) f
 
 ensureTypeMatch :: Ppr e => Type -> Type -> e -> TypeCheck tyenv a ()
 ensureTypeMatch x y inExpr =
   if x == y
     then pure ()
-    else lift $ errorExpected (ppr y) (ppr x) inExpr
+    else TypeCheck . lift $ errorExpected (ppr y) (ppr x) inExpr
 

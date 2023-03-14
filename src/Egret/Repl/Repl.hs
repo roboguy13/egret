@@ -51,7 +51,7 @@ repl = forever $ do
       eqnDb <- asks _proofEnvEqnDb
 
       let go = do
-                (_, targetExpr') <- typeInfer typeEnv targetExpr
+                (_, _, targetExpr') <- typeInfer typeEnv targetExpr
                 bruteForce typeEnv defaultBruteForce eqnDb (goal :=: targetExpr')
 
       case go of

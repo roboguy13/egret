@@ -47,8 +47,33 @@ options xs =
   in
   coerce (Rewrite.options xs')
 
-qequationToRewrite :: TypedDirectedQEquation tyenv -> WellTypedRewrite tyenv
-qequationToRewrite = undefined
+qequationToRewrite :: TypeEnv tyenv -> TypedDirectedQEquation tyenv -> WellTypedRewrite tyenv
+qequationToRewrite tcEnv (Dir Fwd eqn) = typedToFwdRewrite tcEnv eqn
+qequationToRewrite tcEnv (Dir Bwd eqn) = typedToFwdRewrite tcEnv (flipEqn eqn)
+
+typedToFwdRewrite :: TypeEnv tyenv -> TypedQEquation tyenv -> WellTypedRewrite tyenv
+typedToFwdRewrite tcEnv (lhs :=: rhs) = WellTypedRewrite $ Rewrite go
+  where
+    go e =
+      case match tcEnv lhs e of
+        Left {} -> Nothing
+        Right env -> Just $ applyBoundSubst env rhs
+
+
+
+-- untypedToRewrite :: (Show a, Eq a) => DirectedQEquation a -> Rewrite Expr a
+-- untypedToRewrite (Dir Fwd eqn) = toFwdRewrite eqn
+-- untypedToRewrite (Dir Bwd eqn) = toFwdRewrite (flipEqn eqn)
+--
+-- toFwdRewrite :: forall a. (Show a, Eq a) => QEquation a -> Rewrite Expr a
+-- toFwdRewrite (lhs :=: rhs) = Rewrite go
+--   where
+--     go :: Expr a -> Maybe (Expr a)
+--     go e =
+--       case match lhs e of
+--         Left {} -> Nothing
+--         Right env -> Just $ applyUnifyEnv env rhs
+--
 
 rewriteHere :: WellTypedRewrite tyenv -> TypedExpr tyenv -> Maybe (TypedExpr tyenv)
 rewriteHere (WellTypedRewrite re) = runRewrite re
