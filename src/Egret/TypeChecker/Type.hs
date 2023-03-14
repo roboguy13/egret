@@ -29,7 +29,7 @@ module Egret.TypeChecker.Type
 
   ,withTypeSigs
 
-  ,extendTypeEnv
+  -- ,extendTypeEnv
   ,localTypeEnv
 
   ,TypeEnvExtended
@@ -218,8 +218,10 @@ newtype BoundSubst (tyenv :: TyEnv) b a = BoundSubst [(b, TypedExpr' tyenv a)]
 emptyBoundSubst :: BoundSubst tyenv b a
 emptyBoundSubst = BoundSubst []
 
-applyBoundSubst :: Show a => BoundSubst tyenv Int a -> TypedScopedExpr tyenv a -> TypedExpr' tyenv a
-applyBoundSubst env = TypedExpr . instantiate go . coerce
+applyBoundSubst :: (Eq a, Show a, Ppr a) => TypeEnv' tyenv a -> BoundSubst tyenv Int a -> TypedScopedExpr tyenv a -> Either String (TypedExpr' tyenv a)
+applyBoundSubst tcEnv env e0 = do
+    (_, _, e) <- typeInfer tcEnv . instantiate go $ coerce e0
+    pure e
   where
     go i =
       case boundSubstLookup i env of

@@ -88,9 +88,9 @@ fwdUsingReplace tcEnv defn givenEqn@(givenLhs :=: givenRhs) =
     go = do
       let defnLhs :=: defnRhs = defn
 
-      unifyEnv <- first getUnifyError $ match tcEnv defnLhs givenLhs 
+      unifyEnv <- match tcEnv defnLhs givenLhs 
 
-      let subst'dDefRhs = applyBoundSubst unifyEnv defnRhs
+      subst'dDefRhs <- applyBoundSubst tcEnv unifyEnv defnRhs
 
       when (subst'dDefRhs /= givenRhs)
         $ Left

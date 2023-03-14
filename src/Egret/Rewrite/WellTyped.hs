@@ -55,11 +55,13 @@ typedToFwdRewrite :: TypeEnv tyenv -> TypedQEquation tyenv -> WellTypedRewrite t
 typedToFwdRewrite tcEnv (lhs :=: rhs) = WellTypedRewrite $ Rewrite go
   where
     go e =
-      case match tcEnv lhs e of
+      let m = do
+                env <- match tcEnv lhs e 
+                applyBoundSubst tcEnv env rhs
+      in
+      case m of
         Left {} -> Nothing
-        Right env -> Just $ applyBoundSubst env rhs
-
-
+        Right r -> Just r
 
 -- untypedToRewrite :: (Show a, Eq a) => DirectedQEquation a -> Rewrite Expr a
 -- untypedToRewrite (Dir Fwd eqn) = toFwdRewrite eqn
@@ -105,9 +107,13 @@ toFwdRewrite env (lhs :=: rhs) = WellTypedRewrite $ Rewrite go
   where
     go :: TypedExpr' tyenv String -> Maybe (TypedExpr' tyenv String)
     go e =
-      case match env lhs e of
+      let m = do
+                unifyEnv <- match env lhs e
+                applyBoundSubst env unifyEnv rhs
+      in
+      case m of
         Left {} -> Nothing
-        Right unifyEnv -> Just $ applyBoundSubst unifyEnv rhs
+        Right r -> Just r
 
 -- applySubstEqn :: BoundSubst tyenv String -> TypedQEquation -> Maybe (Equation Expr String)
 -- applySubstEqn env (lhs :=: rhs) =

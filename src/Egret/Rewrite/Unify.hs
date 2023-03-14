@@ -21,8 +21,10 @@ import           Control.Monad.State
 
 type UnifyEnv tyenv = BoundSubst tyenv Int
 
-newtype UnifyError = UnifyError { getUnifyError :: String }
-  deriving (Show)
+-- newtype UnifyError = UnifyError { getUnifyError :: String }
+--   deriving (Show)
+
+type UnifyError = String
 
 type Unify tyenv a = StateT (UnifyEnv tyenv a) (Either UnifyError)
 
@@ -49,7 +51,7 @@ match tyEnv x0 y0 =
 requireTypeEq :: Type -> Type -> Either UnifyError ()
 requireTypeEq a b
   | a == b = pure ()
-  | otherwise = Left $ UnifyError $ "Unify: Cannot match type " ++ show a ++ " with type " ++ show b
+  | otherwise = Left $ "Unify: Cannot match type " ++ show a ++ " with type " ++ show b
 
 requireTypeEqMaybe :: Type -> Type -> Maybe ()
 requireTypeEqMaybe a b
@@ -57,7 +59,7 @@ requireTypeEqMaybe a b
   | otherwise = Nothing
 
 unifyError :: String -> Unify tyenv x r
-unifyError = lift . Left . UnifyError
+unifyError = lift . Left
 
 cannotMatch :: (Show a, Show b) => a -> b -> Unify tyenv x r
 cannotMatch x y =
