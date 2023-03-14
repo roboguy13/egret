@@ -50,9 +50,14 @@ repl = forever $ do
     Right (RunBruteForce fuelMaybe targetExpr) -> do
       eqnDb <- asks _proofEnvEqnDb
 
+      let bruteForceConfig =
+            case fuelMaybe of
+              Nothing -> defaultBruteForce
+              Just fuel -> defaultBruteForce { _bruteForceStartFuel = fuel }
+
       let go = do
                 (_, _, targetExpr') <- typeInfer typeEnv targetExpr
-                bruteForce typeEnv defaultBruteForce eqnDb (goal :=: targetExpr')
+                bruteForce typeEnv bruteForceConfig eqnDb (goal :=: targetExpr')
 
       case go of
         Left err -> liftIO $ putStrLn err
