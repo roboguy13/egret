@@ -58,6 +58,7 @@ executable egret
       Egret.TypeChecker.Equation
       Egret.TypeChecker.Expr
 
+      Egret.Solver.TreeSearch
       Egret.Solver.BruteForce
 
       Egret.Utils
