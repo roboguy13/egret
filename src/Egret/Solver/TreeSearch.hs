@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Egret.Solver.TreeSearch
   where
@@ -60,101 +61,87 @@ evenFuelSplitter fuel xs =
         (map (,Fuel d))
         xs
 
-data Result a
-  = OutOfFuel (Fuel -> Result a)
+data Result m a
+  = OutOfFuel (Fuel -> m (Result m a))
   | Success a
   | Failure Fuel
   deriving (Functor)
 
--- resume :: TreeSearchConfig -> Fuel -> [Result a] -> Iter (Result a) [Result a]
--- resume config fuel rs =
---     case findFirst getSuccess rs of
---       Just r -> Done $ Success r
---       Nothing ->
---         let splitter = _treeFuelSplitter config
---             ks = mapMaybe getOutOfFuel rs
---         in
---         case harvestFailures rs of
---           Fuel 0 ->
---             if not (null ks)
---               then Done $ let r = OutOfFuel (const r) in r
---               else Done . Failure $ Fuel 0
---
---           _ -> Step . map (uncurry ($)) $ splitter fuel ks
+data TreeSearch m a b =
+  TreeSearch
+    { _splitSearch :: a -> [b]
+    , _searchStep  :: b -> m (Iter a a)
+    }
 
--- data TreeSearchStrategy
+-- runLevel :: TreeSearch m a b -> a -> [m (Iter a a)]
+-- runLevel = undefined
 
-class TreeSearch a where
-  splitSearch :: a -> NonEmpty a
-  searchStep :: a -> Iter (Result a) a
-  -- runTree :: Result a -> 
-  -- -- searchBranch :: a -> Result a
-  -- spawnBranches :: TreeSearchConfig -> a -> Iter (Result a) [Result a]
-  -- combineBranches :: TreeSearchConfig -> [Result a] -> Result a
-
-runSearch :: TreeSearch a => TreeSearchConfig -> a -> Result a
-runSearch config x0 = go x0 (_treeSearchFuel config)
+runSearch :: forall m a b. Monad m => TreeSearch m a b -> TreeSearchConfig -> a -> m (Result m a)
+runSearch searcher config x0 = go x0 (_treeSearchFuel config)
   where
+    splitSearch = _splitSearch searcher
+    searchStep = _searchStep searcher
+
     fuelSplitter = _treeFuelSplitter config
 
-    go x (Fuel 0) = OutOfFuel (go x)
+    go :: b -> Fuel -> m (Result m a)
+    go x (Fuel 0) = pure $ OutOfFuel (go x)
     go x fuel =
-      case searchStep x of
-        Step y ->
+      searchStep x >>= \case
+        Step y -> do
           let subtrees = splitSearch y
-          in
-          sconcat $ uncurry go <$> fuelSplitter fuel subtrees
+          case subtrees of
+            [] -> pure $ Failure fuel
+            (z:zs) -> do
+              vs <- traverse (uncurry go) $ fuelSplitter (useFuel fuel) (z :| zs)
+              foldr1M_NE (<++>) vs
 
-        Done (Success r) -> Success r
-        Done (Failure subFuel) -> Failure $ subFuel <> fuel
-        Done (OutOfFuel k) -> k fuel -- TODO: Does this make sense?
+        Done r -> pure $ Success r
 
-type SearchCont a = Fuel -> Result a
+type SearchCont m a = Fuel -> m (Result m a)
 
-(<+>) :: SearchCont a -> SearchCont a -> SearchCont a
-f <+> g = \fuel ->
-  case f fuel of
-    OutOfFuel k -> OutOfFuel k
-    Success x -> Success x
+useFuel :: Fuel -> Fuel
+useFuel (Fuel n) = Fuel (n-1)
+
+(<+>) :: Monad m => SearchCont m a -> SearchCont m a -> SearchCont m a
+f <+> g =
+  f >=> \case
+    OutOfFuel k -> pure $ OutOfFuel k
+    Success x -> pure $ Success x
     Failure remainingFuel -> g remainingFuel
 
-instance Semigroup (Result a) where
-  Success r <> _ = Success r
-  _ <> Success r = Success r
+(<++>) :: Monad m => Result m a -> Result m a -> m (Result m a)
+(<++>) (Success r) _ = pure $ Success r
+(<++>) _ (Success r) = pure $ Success r
+(<++>) (Failure fuel) (OutOfFuel k) = k fuel
+(<++>) (OutOfFuel k) (Failure fuel) = k fuel
+(<++>) (Failure fuel1) (Failure fuel2) = pure $ Failure (fuel1 <> fuel2)
+(<++>) (OutOfFuel k1) (OutOfFuel k2) = pure $ OutOfFuel (k1 <+> k2)
 
-  Failure fuel <> OutOfFuel k = k fuel
-  OutOfFuel k <> Failure fuel = k fuel
-
-  Failure fuel1 <> Failure fuel2 = Failure (fuel1 <> fuel2)
-
-  OutOfFuel k1 <> OutOfFuel k2 = OutOfFuel (k1 <+> k2)
-
--- searchStep :: Branch
-
--- runTreeSearch :: forall a. TreeSearch a => TreeSearchConfig -> a -> Result a
--- runTreeSearch config = undefined --go
---   where
---     go :: a -> Iter (Result a) (Result a)
---     go x = do
---       results <- spawnBranches config x
---       let fuel = harvestFailures results
---       xs <- resume config fuel results
---       undefined
---       -- mapM_ go xs
+-- instance Semigroup (Result m a) where
+--   Success r <> _ = Success r
+--   _ <> Success r = Success r
+--
+--   Failure fuel <> OutOfFuel k = k fuel
+--   OutOfFuel k <> Failure fuel = k fuel
+--
+--   Failure fuel1 <> Failure fuel2 = Failure (fuel1 <> fuel2)
+--
+--   OutOfFuel k1 <> OutOfFuel k2 = OutOfFuel (k1 <+> k2)
 
 -- | Get remaining unused fuel from failures
-harvestFailures :: [Result a] -> Fuel
+harvestFailures :: [Result m a] -> Fuel
 harvestFailures = mconcat . mapMaybe getFailure
 
-getOutOfFuel :: Result a -> Maybe (Fuel -> Result a)
+getOutOfFuel :: Result m a -> Maybe (Fuel -> m (Result m a))
 getOutOfFuel (OutOfFuel k) = Just k
 getOutOfFuel _ = Nothing
 
-getSuccess :: Result a -> Maybe a
+getSuccess :: Result m a -> Maybe a
 getSuccess (Success x) = Just x
 getSuccess _ = Nothing
 
-getFailure :: Result a -> Maybe Fuel
+getFailure :: Result m a -> Maybe Fuel
 getFailure (Failure x) = Just x
 getFailure _ = Nothing
 

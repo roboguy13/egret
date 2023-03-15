@@ -22,6 +22,8 @@ import           Control.Lens.TH
 
 import           Data.Maybe
 
+import           Control.Monad.Writer
+
 data ProofTraceStep tyenv a =
   ProofTraceStep
     { _stepGoal   :: Goal tyenv
@@ -56,6 +58,8 @@ instance Ppr a => Ppr (ProofTrace tyenv a) where
     vcat (map pprDoc steps)
       $$
     pprDoc goal
+
+type TraceWriter tyenv a = Writer [ProofTraceStep tyenv a]
 
 singletonTrace :: Goal tyenv -> ProofTraceStep tyenv a -> ProofTrace tyenv a
 singletonTrace x y = ProofTrace x [y]

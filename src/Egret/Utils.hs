@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Egret.Utils
   where
@@ -38,4 +39,11 @@ runIter f initial =
   in r
   where
     go x = f x >>= go
+
+foldr1M_NE :: forall m a. Monad m => (a -> a -> m a) -> NonEmpty a -> m a
+foldr1M_NE f (x0 :| xs0) = go (x0 : xs0)
+  where
+    go :: [a] -> m a
+    go [x] = pure x
+    go (x : xs) = f x =<< go xs
 

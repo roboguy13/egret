@@ -59,6 +59,7 @@ executable egret
       Egret.TypeChecker.Expr
 
       Egret.Solver.TreeSearch
+      Egret.Solver.Solver
       Egret.Solver.BruteForce
 
       Egret.Utils
