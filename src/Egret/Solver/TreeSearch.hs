@@ -29,6 +29,8 @@ import           Data.Foldable
 import qualified Data.List.NonEmpty as NonEmpty
 import           Data.List.NonEmpty (NonEmpty (..))
 
+import Debug.Trace
+
 newtype Fuel = Fuel { getFuel :: Int }
   deriving (Show, Eq, Ord)
 
@@ -108,7 +110,9 @@ runSearch searcher config x0 initialFuel =
         fanOut fuelSplitter goStep subtrees fuel
 
     goStep :: b -> Fuel -> Backtrack w (Result w a)
-    goStep y (Fuel 0) = pure $ OutOfFuel (goStep y)
+    goStep y (Fuel 0) = do
+      s <- current
+      pure $ OutOfFuel (\fuel -> trace ("resuming with " <> ppr fuel <> " fuel") $ resetTo s *> goStep y fuel)
     goStep y fuel =
       searchStep y >>= \case
         Done (Just r) -> pure $ Success r

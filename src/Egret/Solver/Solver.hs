@@ -20,8 +20,9 @@ data Rewritten tyenv =
     Direction
     Int -- | Where was it rewritten?
     (TypedExpr tyenv) -- | New expression
+    deriving (Show)
 
-type SolverTreeSearch tyenv = TreeSearch (TraceSteps tyenv String) (TypedExpr tyenv) (Rewritten tyenv)
+type SolverTreeSearch tyenv = TreeSearch [Rewritten tyenv] (TypedExpr tyenv) (Rewritten tyenv)
 
 rewrittenResult :: Rewritten tyenv -> TypedExpr tyenv
 rewrittenResult (Rewritten _ _ _ _ e') = e'
@@ -33,4 +34,7 @@ rewrittenToStep :: Rewritten tyenv -> ProofTraceStep tyenv String
 rewrittenToStep (Rewritten e name dir ix _)
   | ix == 0 = ProofTraceStep e (RewriteTactic dir name)
   | otherwise = ProofTraceStep e (RewriteAtTactic ix dir name)
+
+rewrittensToSteps :: [Rewritten tyenv] -> [ProofTraceStep tyenv String]
+rewrittensToSteps = reverse . map rewrittenToStep
 

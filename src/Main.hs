@@ -32,12 +32,11 @@ main = do
   ruleFileName <- getRuleFileName
 
   withParsedRules ruleFileName $ \(tcEnv, ruleDb) -> do
-    print tcEnv
-
     ruleDb' <- runChecked $ checkEquationDb tcEnv ruleDb
 
     putStr "Enter initial expression: "
     hFlush stdout
+
     initialGoal <- requiredParseIO "<stdin>" parseExpr =<< getLine
 
     (_, extendedTcEnv, initialGoal') <- runChecked $ typeInfer tcEnv initialGoal

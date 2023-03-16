@@ -92,7 +92,7 @@ rewriteAt :: At (WellTypedRewrite tyenv) -> TypedExpr tyenv -> Maybe (TypedExpr 
 rewriteAt (At ix0 re) x =
     let res = allRewrites re x
     in
-    traceShow (take 30 res) $ go ix0 res
+    go ix0 res
   where
     go _ [] = Nothing
     go 0 (x:_) = Just x

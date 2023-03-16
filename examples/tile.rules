@@ -5,6 +5,7 @@ cw :: Tile -> Tile
 ccw :: Tile -> Tile
 flipH :: Tile -> Tile
 flipV :: Tile -> Tile
+beside :: Tile -> Tile -> Tile
 
 {cw/cw/cw/cw}
 forall (t :: Tile). cw (cw (cw (cw t))) = t
@@ -29,4 +30,11 @@ forall (t :: Tile). flipV t = ccw (flipH (cw t))
 
 {flipV/flipH}
 forall (t :: Tile). flipV (flipH t) = cw (cw t)
+
+{flipV/flipV}
+forall (t :: Tile). flipV (flipV t) = t
+
+{flipH/beside}
+forall (t1 :: Tile) (t2 :: Tile).
+  flipH (beside t1 t2) = beside (flipH t2) (flipH t1)
 
