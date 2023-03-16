@@ -21,7 +21,7 @@ data Rewritten tyenv =
     Int -- | Where was it rewritten?
     (TypedExpr tyenv) -- | New expression
 
-type SolverTreeSearch tyenv = TreeSearch [ProofTraceStep tyenv String] (TypedExpr tyenv) (Rewritten tyenv)
+type SolverTreeSearch tyenv = TreeSearch (TraceSteps tyenv String) (TypedExpr tyenv) (Rewritten tyenv)
 
 rewrittenResult :: Rewritten tyenv -> TypedExpr tyenv
 rewrittenResult (Rewritten _ _ _ _ e') = e'

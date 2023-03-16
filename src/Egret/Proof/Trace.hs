@@ -59,7 +59,22 @@ instance Ppr a => Ppr (ProofTrace tyenv a) where
       $$
     pprDoc goal
 
-type TraceWriter tyenv a = Writer [ProofTraceStep tyenv a]
+-- type TraceWriter tyenv a = Writer [ProofTraceStep tyenv a]
+
+newtype TraceSteps tyenv a = TraceSteps [ProofTraceStep tyenv a]
+  deriving (Show)
+
+instance Semigroup (TraceSteps tyenv a) where
+  TraceSteps xs <> TraceSteps ys = TraceSteps (ys <> xs)
+
+instance Monoid (TraceSteps tyenv a) where
+  mempty = TraceSteps []
+
+oneTraceStep :: ProofTraceStep tyenv a -> TraceSteps tyenv a
+oneTraceStep = TraceSteps . (:[])
+
+toStepList :: TraceSteps tyenv a -> [ProofTraceStep tyenv a]
+toStepList (TraceSteps xs) = xs
 
 singletonTrace :: Goal tyenv -> ProofTraceStep tyenv a -> ProofTrace tyenv a
 singletonTrace x y = ProofTrace x [y]

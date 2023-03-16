@@ -26,6 +26,8 @@ import           Egret.Utils
 
 import           Control.Monad.Writer
 
+import Debug.Trace
+
 -- | We only keep track of the tree height since, if there
 -- are a lot of rules (branches) most of them will immediately fail
 newtype BruteForceConfig =
@@ -50,7 +52,7 @@ bruteForce tcEnv config eqnDb (startLhs :=: goalRhs) =
       startLhs
       startFuel
     of
-  (Success _, steps) -> Right $ ProofTrace goalRhs steps
+  (Success _, steps) -> traceShow (goalRhs, steps) $ Right $ ProofTrace goalRhs (toStepList steps)
   (OutOfFuel {}, _) -> Left $ "Ran out of fuel. Start with " <> ppr startFuel <> " fuel"
   (Failure fuelLeft, _) -> Left $ "Failed with " <> ppr fuelLeft <> " fuel remaining"
   where
@@ -67,11 +69,11 @@ bruteForce tcEnv config eqnDb (startLhs :=: goalRhs) =
     splitSearch e =
       concatMap (\(name, dir, re) -> zipWith (Rewritten e name dir) [0..] (allRewrites re e)) rewriteDb
 
-    searchStep :: Rewritten tyenv -> Backtrack [ProofTraceStep tyenv String] (Iter (Maybe (TypedExpr tyenv)) (TypedExpr tyenv))
+    searchStep :: Rewritten tyenv -> Backtrack (TraceSteps tyenv String) (Iter (Maybe (TypedExpr tyenv)) (TypedExpr tyenv))
     searchStep rewritten = toBacktrack $ do
       let proofStep = rewrittenToStep rewritten
           result = rewrittenResult rewritten
-      tell [proofStep]
+      tell $ oneTraceStep proofStep
       if result == goalRhs
         then pure $ Done $ Just goalRhs
         else do
