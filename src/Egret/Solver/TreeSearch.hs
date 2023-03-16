@@ -10,6 +10,7 @@ module Egret.Solver.TreeSearch
   where
 
 import           Egret.Utils
+import           Egret.Ppr hiding ((<+>))
 
 import           Data.Maybe
 import           Data.List
@@ -19,6 +20,8 @@ import           Data.Proxy
 import           Control.Monad.Reader
 
 import           Data.Semigroup
+
+import           Data.Foldable
 
 import qualified Data.List.NonEmpty as NonEmpty
 import           Data.List.NonEmpty (NonEmpty (..))
@@ -32,12 +35,15 @@ instance Semigroup Fuel where
 instance Monoid Fuel where
   mempty = Fuel 0
 
+instance Ppr Fuel where
+  pprDoc (Fuel x) = text $ show x
+
 -- | @length (_treeFuelSplitter fuel xs) = length xs@
 --   @sum (map snd (_treeFuelSplitter fuel xs)) = fuel@
 data TreeSearchConfig =
   TreeSearchConfig
   { _treeSearchFuel :: Fuel
-  , _treeFuelSplitter :: forall a. Fuel -> NonEmpty a -> NonEmpty (a, Fuel)
+  , _treeFuelSplitter :: forall a. Fuel -> [a] -> [(a, Fuel)]
   }
 
 defaultTreeSearchConfig :: TreeSearchConfig
@@ -49,7 +55,7 @@ defaultTreeSearchConfig =
 
 -- if fuel `mod` length xs == 0
 --   then (exists fuel'. map snd (evenFuelSplitter fuel xs) = replicate n fuel')
-evenFuelSplitter :: Fuel -> NonEmpty a -> NonEmpty (a, Fuel)
+evenFuelSplitter :: Fuel -> [a] -> [(a, Fuel)]
 evenFuelSplitter fuel xs =
   let (d, remainder) = getFuel fuel `divMod` length xs
   in
@@ -70,33 +76,39 @@ data Result m a
 data TreeSearch m a b =
   TreeSearch
     { _splitSearch :: a -> [b]
-    , _searchStep  :: b -> m (Iter a a)
+    , _searchStep  :: b -> m (Iter (Maybe a) a)
     }
 
--- runLevel :: TreeSearch m a b -> a -> [m (Iter a a)]
--- runLevel = undefined
+fanOut :: (Applicative f) =>
+     (forall a. Fuel -> [a] -> [(a, Fuel)])
+     -> (a -> Fuel -> f b) -> [a] -> Fuel -> [f b]
+fanOut fuelSplitter f subtrees fuel = map (uncurry f) $ fuelSplitter (useFuel fuel) subtrees
 
-runSearch :: forall m a b. Monad m => TreeSearch m a b -> TreeSearchConfig -> a -> m (Result m a)
-runSearch searcher config x0 = go x0 (_treeSearchFuel config)
+runSearch :: forall m a b. Monad m => TreeSearch m a b -> TreeSearchConfig -> a -> Fuel -> m (Result m a)
+runSearch searcher config x0 initialFuel =
+    combineResults (Failure initialFuel)
+      =<< sequence (go x0 initialFuel)
   where
+    fuelSplitter = _treeFuelSplitter config
     splitSearch = _splitSearch searcher
     searchStep = _searchStep searcher
 
-    fuelSplitter = _treeFuelSplitter config
-
-    go :: b -> Fuel -> m (Result m a)
-    go x (Fuel 0) = pure $ OutOfFuel (go x)
+    go :: a -> Fuel -> [m (Result m a)]
     go x fuel =
-      searchStep x >>= \case
-        Step y -> do
-          let subtrees = splitSearch y
-          case subtrees of
-            [] -> pure $ Failure fuel
-            (z:zs) -> do
-              vs <- traverse (uncurry go) $ fuelSplitter (useFuel fuel) (z :| zs)
-              foldr1M_NE (<++>) vs
+      let
+        subtrees = splitSearch x
+      in
+        fanOut fuelSplitter goStep subtrees fuel
 
-        Done r -> pure $ Success r
+    goStep :: b -> Fuel -> m (Result m a)
+    goStep y (Fuel 0) = pure $ OutOfFuel (goStep y)
+    goStep y fuel =
+      searchStep y >>= \case
+        Done (Just r) -> pure $ Success r
+        Done Nothing -> pure $ Failure fuel
+        Step z -> do
+          xs <- sequence $ go z fuel
+          combineResults (Failure fuel) xs
 
 type SearchCont m a = Fuel -> m (Result m a)
 
@@ -118,16 +130,9 @@ f <+> g =
 (<++>) (Failure fuel1) (Failure fuel2) = pure $ Failure (fuel1 <> fuel2)
 (<++>) (OutOfFuel k1) (OutOfFuel k2) = pure $ OutOfFuel (k1 <+> k2)
 
--- instance Semigroup (Result m a) where
---   Success r <> _ = Success r
---   _ <> Success r = Success r
---
---   Failure fuel <> OutOfFuel k = k fuel
---   OutOfFuel k <> Failure fuel = k fuel
---
---   Failure fuel1 <> Failure fuel2 = Failure (fuel1 <> fuel2)
---
---   OutOfFuel k1 <> OutOfFuel k2 = OutOfFuel (k1 <+> k2)
+combineResults :: Monad m => Result m a -> [Result m a] -> m (Result m a)
+combineResults z [] = pure z
+combineResults z xs = foldr1M (<++>) xs
 
 -- | Get remaining unused fuel from failures
 harvestFailures :: [Result m a] -> Fuel

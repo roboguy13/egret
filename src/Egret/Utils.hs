@@ -20,8 +20,9 @@ joinedTraverseScope f (Scope s) = join <$> traverse f' s
     f' (B b) = f b
     f' (F a) = pure a
 
-splitCons :: (a -> b) -> ([a] -> [b]) -> NonEmpty a -> NonEmpty b
-splitCons f g (x :| xs) = f x :| g xs
+splitCons :: (a -> b) -> ([a] -> [b]) -> [a] -> [b]
+splitCons _ _ [] = []
+splitCons f g (x : xs) = f x : g xs
 
 findFirst :: (a -> Maybe b) -> [a] -> Maybe b
 findFirst f = getFirst . foldMap (First . f)
@@ -42,6 +43,14 @@ runIter f initial =
 
 foldr1M_NE :: forall m a. Monad m => (a -> a -> m a) -> NonEmpty a -> m a
 foldr1M_NE f (x0 :| xs0) = go (x0 : xs0)
+  where
+    go :: [a] -> m a
+    go [x] = pure x
+    go (x : xs) = f x =<< go xs
+
+foldr1M :: forall m a. Monad m => (a -> a -> m a) -> [a] -> m a
+foldr1M _ [] = error "foldr1M: empty list"
+foldr1M f (x0 : xs0) = go (x0 : xs0)
   where
     go :: [a] -> m a
     go [x] = pure x
