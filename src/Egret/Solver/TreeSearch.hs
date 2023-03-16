@@ -5,12 +5,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Egret.Solver.TreeSearch
   where
 
 import           Egret.Utils
 import           Egret.Ppr hiding ((<+>))
+
+import           Egret.Solver.Backtrack
 
 import           Data.Maybe
 import           Data.List
@@ -67,11 +70,21 @@ evenFuelSplitter fuel xs =
         (map (,Fuel d))
         xs
 
-data Result m a
-  = OutOfFuel (Fuel -> m (Result m a))
-  | Success a
-  | Failure Fuel
-  deriving (Functor)
+-- data Result m a
+--   = OutOfFuel (Fuel -> m (Result m a))
+--   | Success a
+--   | Failure Fuel
+--   deriving (Functor)
+
+data NotFound m a
+  = OutOfFuel' (Fuel -> m (Result m a))
+  | Failure' Fuel
+
+type Result m a = Either (NotFound m a) a
+
+pattern OutOfFuel k = Left (OutOfFuel' k)
+pattern Failure x = Left (Failure' x)
+pattern Success x = Right x
 
 data TreeSearch m a b =
   TreeSearch
