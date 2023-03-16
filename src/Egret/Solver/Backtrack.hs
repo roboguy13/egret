@@ -29,10 +29,6 @@ newtype Backtrack w a =
   Backtrack (Writer w a)
   deriving (Functor, Applicative, Monad)
 
--- instance (Semigroup w, Monad m) => Applicative (BacktrackT w m) where
---   pure = BacktrackT . pure
---   (<*>) = ap
-
 execBacktrack :: (Monoid w) => Backtrack w a -> w
 execBacktrack (Backtrack act) = execWriter act
 
@@ -41,8 +37,6 @@ runBacktrack (Backtrack act) = runWriter act
 
 toBacktrack :: Writer w a -> Backtrack w a
 toBacktrack = Backtrack
-  -- case runWriter act of
-  --   (x, w) -> Backtrack (put w) $> x
 
 (<||>) :: (Monoid w) => Backtrack w (Either e a) -> Backtrack w (Either e a) -> Backtrack w (Either e a)
 x <||> y = do

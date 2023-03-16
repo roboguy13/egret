@@ -34,6 +34,3 @@ rewrittenToStep (Rewritten e name dir ix _)
   | ix == 0 = ProofTraceStep e (RewriteTactic dir name)
   | otherwise = ProofTraceStep e (RewriteAtTactic ix dir name)
 
--- type SolverTreeSearch tyenv = TreeSearch (TraceWriter tyenv String) (TypedExpr tyenv) (TypedExpr tyenv, Tactic String)
--- type SolverResult tyenv = Result (TraceWriter tyenv String) (TypedExpr tyenv)
-
