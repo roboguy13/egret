@@ -24,56 +24,58 @@ import           Egret.Ppr
 import           System.IO
 import           System.Exit
 
-repl :: ProofM tyenv String IO ()
+import           System.Console.Haskeline
+
+import           Data.Maybe
+
+repl :: ProofM tyenv String (InputT IO) ()
 repl = forever $ do
   goal <- gets _currentGoal
   liftIO $ putStrLn $ "Current expression: " <> ppr goal
 
-  liftIO $ putStr "> "
-  liftIO $ hFlush stdout
+  lift (getInputLine "> ") >>= \case
+    Nothing -> liftIO exitSuccess
+    Just input -> do
+      typeEnv <- asks _proofEnvTypeEnv
 
-  input <- liftIO getLine
+      case parse' parseCommand input of
+        Left err ->
+          liftIO $ putStrLn $ "Cannot parse command:\n" ++ err
 
-  typeEnv <- asks _proofEnvTypeEnv
+        Right (RunTactic tactic) -> do
+          applyTacticM tactic >>= \case
+            Nothing ->
+              liftIO $ putStrLn "Tactic failed"
 
-  case parse' parseCommand input of
-    Left err ->
-      liftIO $ putStrLn $ "Cannot parse command:\n" ++ err
+            Just () -> pure ()
 
-    Right (RunTactic tactic) -> do
-      applyTacticM tactic >>= \case
-        Nothing ->
-          liftIO $ putStrLn "Tactic failed"
+        Right (RunBruteForce fuelMaybe targetExpr) -> do
+          eqnDb <- asks _proofEnvEqnDb
 
-        Just () -> pure ()
+          let bruteForceConfig =
+                case fuelMaybe of
+                  Nothing -> defaultBruteForce
+                  Just fuel -> defaultBruteForce { _bruteForceStartFuel = fuel }
 
-    Right (RunBruteForce fuelMaybe targetExpr) -> do
-      eqnDb <- asks _proofEnvEqnDb
+          let go = do
+                    (_, _, targetExpr') <- typeInfer typeEnv targetExpr
+                    bruteForce typeEnv bruteForceConfig eqnDb (goal :=: targetExpr')
 
-      let bruteForceConfig =
-            case fuelMaybe of
-              Nothing -> defaultBruteForce
-              Just fuel -> defaultBruteForce { _bruteForceStartFuel = fuel }
+          case go of
+            Left err -> liftIO $ putStrLn err
+            Right tr -> do
+              modify (<> tr)
 
-      let go = do
-                (_, _, targetExpr') <- typeInfer typeEnv targetExpr
-                bruteForce typeEnv bruteForceConfig eqnDb (goal :=: targetExpr')
+        Right Undo -> do
+          tr <- get
+          case traceUndo tr of
+            Left err -> liftIO $ putStrLn err
+            Right newTr -> put newTr
 
-      case go of
-        Left err -> liftIO $ putStrLn err
-        Right tr -> do
-          modify (<> tr)
+        Right Log -> do
+          tr <- get
+          liftIO $ putStrLn $ ppr tr
+          liftIO $ putStrLn ""
 
-    Right Undo -> do
-      tr <- get
-      case traceUndo tr of
-        Left err -> liftIO $ putStrLn err
-        Right newTr -> put newTr
-
-    Right Log -> do
-      tr <- get
-      liftIO $ putStrLn $ ppr tr
-      liftIO $ putStrLn ""
-
-    Right Quit -> liftIO exitSuccess
+        Right Quit -> liftIO exitSuccess
 

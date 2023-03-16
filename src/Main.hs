@@ -25,6 +25,8 @@ import           System.IO
 import           System.Environment
 import           System.Exit
 
+import           System.Console.Haskeline
+
 main :: IO ()
 main = do
   ruleFileName <- getRuleFileName
@@ -47,7 +49,7 @@ main = do
       ruleDb'' <- runChecked $ checkEquationDb tcEnv' ruleDb
       (_, _, initialGoal'') <- runChecked $ typeInfer tcEnv' initialGoal
 
-      runProofM tcEnv' ruleDb'' initialGoal'' repl
+      runInputT defaultSettings $ runProofM tcEnv' ruleDb'' initialGoal'' repl
 
 getRuleFileName :: IO String
 getRuleFileName =

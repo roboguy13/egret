@@ -37,6 +37,9 @@ data ProofEnv tyenv =
 newtype ProofM tyenv a m r = ProofM (ReaderT (ProofEnv tyenv) (StateT (ProofTrace tyenv a) m) r)
   deriving (Functor, Applicative, Monad, MonadState (ProofTrace tyenv a), MonadReader (ProofEnv tyenv), MonadIO)
 
+instance MonadTrans (ProofM tyenv a) where
+  lift = ProofM . lift . lift
+
 runProofM :: Monad m => TypeEnv tyenv -> TypedEquationDB tyenv -> Goal tyenv -> ProofM tyenv a m r -> m r
 runProofM typeEnv eqnDb goal (ProofM m) = evalStateT (runReaderT m env) (emptyTrace goal) 
   where

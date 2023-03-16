@@ -67,6 +67,6 @@ executable egret
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.16.4.0, lens, mtl, transformers, megaparsec, containers, pretty, deriving-compat, bound, comonad, gdp
+    build-depends:    base ^>=4.16.4.0, lens, mtl, transformers, megaparsec, containers, pretty, deriving-compat, bound, comonad, gdp, haskeline
     hs-source-dirs:   src
     default-language: Haskell2010

@@ -26,8 +26,6 @@ import           Egret.Utils
 
 import           Control.Monad.Writer
 
-import Debug.Trace
-
 -- | We only keep track of the tree height since, if there
 -- are a lot of rules (branches) most of them will immediately fail
 newtype BruteForceConfig =
@@ -52,7 +50,7 @@ bruteForce tcEnv config eqnDb (startLhs :=: goalRhs) =
       startLhs
       startFuel
     of
-  (Success _, steps) -> traceShow (goalRhs, steps) $ Right $ ProofTrace goalRhs (toStepList steps)
+  (Success _, steps) -> Right $ ProofTrace goalRhs (toStepList steps)
   (OutOfFuel {}, _) -> Left $ "Ran out of fuel. Start with " <> ppr startFuel <> " fuel"
   (Failure fuelLeft, _) -> Left $ "Failed with " <> ppr fuelLeft <> " fuel remaining"
   where
