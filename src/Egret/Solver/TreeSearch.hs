@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -21,6 +20,7 @@ import           Data.List
 import           Data.Proxy
 
 import           Control.Monad.Reader
+import           Control.Monad.Writer
 
 import           Data.Semigroup
 
@@ -70,14 +70,8 @@ evenFuelSplitter fuel xs =
         (map (,Fuel d))
         xs
 
--- data Result m a
---   = OutOfFuel (Fuel -> m (Result m a))
---   | Success a
---   | Failure Fuel
---   deriving (Functor)
-
-data NotFound m a
-  = OutOfFuel' (Fuel -> m (Result m a))
+data NotFound w a
+  = OutOfFuel' (Fuel -> Backtrack w (Result w a))
   | Failure' Fuel
 
 type Result m a = Either (NotFound m a) a
@@ -86,10 +80,10 @@ pattern OutOfFuel k = Left (OutOfFuel' k)
 pattern Failure x = Left (Failure' x)
 pattern Success x = Right x
 
-data TreeSearch m a b =
+data TreeSearch w a b =
   TreeSearch
     { _splitSearch :: a -> [b]
-    , _searchStep  :: b -> m (Iter (Maybe a) a)
+    , _searchStep  :: b -> Backtrack w (Iter (Maybe a) a)
     }
 
 fanOut :: (Applicative f) =>
@@ -97,69 +91,48 @@ fanOut :: (Applicative f) =>
      -> (a -> Fuel -> f b) -> [a] -> Fuel -> [f b]
 fanOut fuelSplitter f subtrees fuel = map (uncurry f) $ fuelSplitter (useFuel fuel) subtrees
 
-runSearch :: forall m a b. Monad m => TreeSearch m a b -> TreeSearchConfig -> a -> Fuel -> m (Result m a)
+runSearch :: forall w a b. Monoid w => TreeSearch w a b -> TreeSearchConfig -> a -> Fuel -> Backtrack w (Result w a)
 runSearch searcher config x0 initialFuel =
-    combineResults (Failure initialFuel)
-      =<< sequence (go x0 initialFuel)
+    backtrackingChoice (Failure' initialFuel)
+      $ go x0 initialFuel
   where
     fuelSplitter = _treeFuelSplitter config
     splitSearch = _splitSearch searcher
     searchStep = _searchStep searcher
 
-    go :: a -> Fuel -> [m (Result m a)]
+    go :: a -> Fuel -> [Backtrack w (Result w a)]
     go x fuel =
       let
         subtrees = splitSearch x
       in
         fanOut fuelSplitter goStep subtrees fuel
 
-    goStep :: b -> Fuel -> m (Result m a)
+    goStep :: b -> Fuel -> Backtrack w (Result w a)
     goStep y (Fuel 0) = pure $ OutOfFuel (goStep y)
     goStep y fuel =
       searchStep y >>= \case
         Done (Just r) -> pure $ Success r
-        Done Nothing -> pure $ Failure fuel
-        Step z -> do
-          xs <- sequence $ go z fuel
-          combineResults (Failure fuel) xs
+        Done Nothing  -> pure $ Failure fuel
+        Step z        -> backtrackingChoice (Failure' fuel) $ go z fuel
 
-type SearchCont m a = Fuel -> m (Result m a)
+type SearchCont w a = Fuel -> Backtrack w (Result w a)
 
 useFuel :: Fuel -> Fuel
 useFuel (Fuel n) = Fuel (n-1)
 
-(<+>) :: Monad m => SearchCont m a -> SearchCont m a -> SearchCont m a
-f <+> g =
-  f >=> \case
-    OutOfFuel k -> pure $ OutOfFuel k
-    Success x -> pure $ Success x
-    Failure remainingFuel -> g remainingFuel
-
-(<++>) :: Monad m => Result m a -> Result m a -> m (Result m a)
-(<++>) (Success r) _ = pure $ Success r
-(<++>) _ (Success r) = pure $ Success r
-(<++>) (Failure fuel) (OutOfFuel k) = k fuel
-(<++>) (OutOfFuel k) (Failure fuel) = k fuel
-(<++>) (Failure fuel1) (Failure fuel2) = pure $ Failure (fuel1 <> fuel2)
-(<++>) (OutOfFuel k1) (OutOfFuel k2) = pure $ OutOfFuel (k1 <+> k2)
-
-combineResults :: Monad m => Result m a -> [Result m a] -> m (Result m a)
-combineResults z [] = pure z
-combineResults z xs = foldr1M (<++>) xs
-
 -- | Get remaining unused fuel from failures
-harvestFailures :: [Result m a] -> Fuel
+harvestFailures :: [Result w a] -> Fuel
 harvestFailures = mconcat . mapMaybe getFailure
 
-getOutOfFuel :: Result m a -> Maybe (Fuel -> m (Result m a))
+getOutOfFuel :: Result w a -> Maybe (Fuel -> Backtrack w (Result w a))
 getOutOfFuel (OutOfFuel k) = Just k
 getOutOfFuel _ = Nothing
 
-getSuccess :: Result m a -> Maybe a
+getSuccess :: Result w a -> Maybe a
 getSuccess (Success x) = Just x
 getSuccess _ = Nothing
 
-getFailure :: Result m a -> Maybe Fuel
+getFailure :: Result w a -> Maybe Fuel
 getFailure (Failure x) = Just x
 getFailure _ = Nothing
 

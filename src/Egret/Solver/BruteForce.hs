@@ -13,7 +13,6 @@ module Egret.Solver.BruteForce
   where
 
 import           Egret.Rewrite.Equation
-import           Egret.Rewrite.Expr
 import           Egret.Rewrite.WellTyped
 import           Egret.Ppr
 
@@ -25,6 +24,7 @@ import           Egret.TypeChecker.Equation
 import           Egret.Proof.Trace
 
 import           Egret.Solver.TreeSearch
+import           Egret.Solver.Backtrack
 import           Egret.Solver.Solver
 
 import           Egret.Utils
@@ -47,17 +47,17 @@ defaultBruteForce =
     }
 
 bruteForce :: forall tyenv. TypeEnv tyenv -> BruteForceConfig -> TypedEquationDB tyenv -> Equation (TypedExpr' tyenv) String -> Either String (ProofTrace tyenv String)
-bruteForce typeEnv config eqnDb (startLhs :=: goalRhs) =
+bruteForce tcEnv config eqnDb (startLhs :=: goalRhs) =
   let
     startFuel = Fuel $ _bruteForceStartFuel config
   in
-  case runWriter $ runSearch
+  case runBacktrack $ runSearch
       bruteForceSearcher
       defaultTreeSearchConfig { _treeSearchFuel = startFuel }
       startLhs
       startFuel
     of
-  (Success r, steps) -> Right $ ProofTrace goalRhs steps
+  (Success _, steps) -> Right $ ProofTrace goalRhs steps
   (OutOfFuel {}, _) -> Left $ "Ran out of fuel. Start with " <> ppr startFuel <> " fuel"
   (Failure fuelLeft, _) -> Left $ "Failed with " <> ppr fuelLeft <> " fuel remaining"
   where
@@ -69,22 +69,27 @@ bruteForce typeEnv config eqnDb (startLhs :=: goalRhs) =
         }
 
     allTactics = concatMap (makeTactics . fst) eqnDb
+    rewriteDb = concatMap (makeRewrites tcEnv) eqnDb
 
-    splitSearch :: TypedExpr tyenv -> [(TypedExpr tyenv, Tactic String)]
+    -- splitSearch :: TypedExpr tyenv -> [(TypedExpr tyenv, (String, WellTypedRewrite tyenv))]
+    splitSearch :: TypedExpr tyenv -> [Rewritten tyenv]
     splitSearch e =
-      map (e,) allTactics
+      concatMap (\(name, dir, re) -> zipWith (Rewritten e name dir) [0..] (allRewrites re e)) rewriteDb
 
-    searchStep :: (TypedExpr tyenv, Tactic String) -> TraceWriter tyenv String (Iter (Maybe (TypedExpr tyenv)) (TypedExpr tyenv))
-    searchStep (e, tactic) =
-      case trace ("running tactic " ++ show tactic) $ runTactic tactic e of
-        Nothing -> pure $ Done Nothing
-        Just e' ->
-          if e' == goalRhs
-            then pure $ Done $ Just e'
-            else do
-              pure $ Step e'
+    searchStep :: Rewritten tyenv -> Backtrack [ProofTraceStep tyenv String] (Iter (Maybe (TypedExpr tyenv)) (TypedExpr tyenv))
+    searchStep rewritten = toBacktrack $ do
+      let proofStep = rewrittenToStep rewritten
+          result = rewrittenResult rewritten
+      -- case trace ("running step " ++ show step) $ runTactic tactic e of
+      --   Nothing -> pure $ Done Nothing
+      --   Just e' ->
+      tell [proofStep]
+      if result == goalRhs
+        then pure $ Done $ Just goalRhs
+        else do
+          pure $ Step result
 
-    runTactic tactic = rewriteHere (unEither (tacticToRewrite typeEnv eqnDb tactic))
+    runTactic tactic = rewriteHere (unEither (tacticToRewrite tcEnv eqnDb tactic))
 
     unEither (Left x) = error $ "Internal error: makeTree: Could not find a rule name that should exit: " ++ show x
     unEither (Right y) = y
@@ -95,6 +100,12 @@ makeTactics :: String -> [Tactic String]
 makeTactics name =
   [ RewriteTactic Fwd name
   , RewriteTactic Bwd name
+  ]
+
+makeRewrites :: TypeEnv tyenv -> (String, TypedQEquation tyenv) -> [(String, Direction, WellTypedRewrite tyenv)]
+makeRewrites tcEnv (name, eqn) =
+  [(name, Fwd, qequationToRewrite tcEnv (Dir Fwd eqn))
+  ,(name, Bwd, qequationToRewrite tcEnv (Dir Bwd eqn))
   ]
 
 writerChoice :: MonadWriter w m => m a -> m a -> m a

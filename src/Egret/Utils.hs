@@ -3,6 +3,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Egret.Utils
+  (joinedTraverseScope
+  ,splitCons
+  ,findFirst
+  ,Iter (..)
+  ,pattern Done
+  ,pattern Step
+  ,runIter
+  ,NonEmpty (..)
+  ,foldr1M_NE
+  ,foldr1M
+  ,foldr1_NE
+  )
   where
 
 import           Bound
@@ -55,4 +67,7 @@ foldr1M f (x0 : xs0) = go (x0 : xs0)
     go :: [a] -> m a
     go [x] = pure x
     go (x : xs) = f x =<< go xs
+
+foldr1_NE :: forall m a. (a -> a -> a) -> NonEmpty a -> a
+foldr1_NE f (x :| xs) = foldr1 f (x : xs)
 
