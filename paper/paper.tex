@@ -1,0 +1,70 @@
+\documentclass[runningheads]{llncs}
+
+\usepackage{graphicx}
+\usepackage{proof}
+\usepackage{stmaryrd}
+
+\input{defs.tex}
+
+\begin{document}
+
+\title{Egret: A Tool For Equational Reasoning}
+\maketitle
+
+\section{Abstract}
+
+\section{Introduction}
+
+Lorem ipsum~\cite{Elliott-2018-ad-extended}.
+
+\section{Type System}
+\[
+  \begin{array}{c}
+    \labinfer[T-Var]{\Gamma \vdash x : \alpha}{(x : \alpha) \in \Gamma}
+    \\\\
+    \labinfer[T-App]{\Gamma \vdash f(x) : \beta}{\Gamma \vdash f : \alpha \ra \beta & \Gamma \vdash x : \alpha}
+  \end{array}
+\]
+
+\section{Semantics}
+
+\subsection{Formation Rules}
+\[
+  \begin{array}{c}
+    \labinfer[Refl]{\Gamma \vdash x \eq x}{\Gamma \vdash x : \alpha}
+    ~~~
+    \labinfer[Sym]{\Gamma \vdash y \eq x}{\Gamma \vdash x \eq y}
+    ~~~
+    \labinfer[Trans]{\Gamma \vdash x \eq z}{\Gamma \vdash x \eq y & \Gamma \vdash y \eq z}
+    \\\\
+    \labinfer[Rewrite]{\Gamma \vdash x \rewrite y}{\Gamma \vdash x \eq y}
+  \end{array}
+\]
+
+\subsection{Denotational Semantics}
+
+\[
+  \begin{array}{c}
+    \sem{x \rewrite y} : \Expr \ra \mathcal{P}(\Expr)
+    \\
+    \sem{x \rewrite y}(x) = \{x, y\}
+    \\
+    \sem{x \rewrite y}(z) = \{z\}\textnormal{ where $z\neq x$}
+    \\
+    \sem{x \rewrite y}(f(e)) = \{ f'(e') \mid f' \in \sem{x \rewrite y}(f) \land e' \in \sem{x \rewrite y}(e) \}
+  \end{array}
+\]
+
+
+\subsection{Operational Semantics}
+
+\subsection{Soundness}
+
+\subsection{Completeness}
+
+
+\bibliographystyle{splncs04}
+\bibliography{paper}
+
+\end{document}
+

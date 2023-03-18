@@ -1,0 +1,14 @@
+% From https://tex.stackexchange.com/questions/235118/making-a-thicker-cdot-for-dot-product-that-is-thinner-than-bullet
+\makeatletter
+\newcommand*\bigcdot{\mathpalette\bigcdot@{.5}}
+\newcommand*\bigcdot@[2]{\mathbin{\vcenter{\hbox{\scalebox{#2}{$\m@th#1\bullet$}}}}}
+\makeatother
+
+\newcommand{\labinfer} [3] [] {\infer[{\textsc{#1}}]{#2}{#3}}
+\newcommand{\eq} {\stackrel{\bigcdot}{=}}
+
+\newcommand{\rewrite} {\Rightarrow}
+\newcommand{\ra} {\rightarrow}
+\newcommand{\sem} [1] {\llbracket #1 \rrbracket}
+
+\newcommand{\Expr} {\textnormal{Expr}}

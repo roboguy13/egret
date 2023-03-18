@@ -1,0 +1,11 @@
+\begin{thebibliography}{1}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\providecommand{\doi}[1]{https://doi.org/#1}
+
+\bibitem{Elliott-2018-ad-extended}
+Elliott, C.: The simple essence of automatic differentiation (extended
+  version). CoRR  \textbf{abs/1804.00746} (2018),
+  \url{https://arxiv.org/abs/1804.00746}
+
+\end{thebibliography}

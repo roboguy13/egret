@@ -76,11 +76,11 @@ bruteForce tcEnv config eqnDb (startLhs :=: goalRhs) =
       putTell [rewritten]
       -- soFar' <- current
       
-      if trace ("soFar = " ++ show (map (ppr . rewrittenResult) soFar)) $ result == goalRhs
+      if {- trace ("soFar = " ++ show (map (ppr . rewrittenResult) soFar)) $ -} result == goalRhs
         then pure $ Done $ Just goalRhs
         else
             -- If we've seen the expression before, stop this branch
-          if trace ("checking " ++ show (ppr result, map (ppr . rewrittenResult) soFar)) $ result `elem` map rewrittenResult soFar
+          if {- trace ("checking " ++ show (ppr result, map (ppr . rewrittenResult) soFar)) $ -} result `elem` map rewrittenResult soFar
             then pure $ Done Nothing
             else pure $ Step result
 
