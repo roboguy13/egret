@@ -49,9 +49,10 @@ Lorem ipsum~\cite{Elliott-2018-ad-extended}.
     \\
     \sem{x \rewrite y}(x) = \{x, y\}
     \\
-    \sem{x \rewrite y}(z) = \{z\}\textnormal{ where $z\neq x$}
+    \sem{x \rewrite y}(z) = \{z\}\textnormal{ where $x\neq z$}
     \\
     \sem{x \rewrite y}(f(e)) = \{ f'(e') \mid f' \in \sem{x \rewrite y}(f) \land e' \in \sem{x \rewrite y}(e) \}
+        \textnormal{ where $x \neq f(e)$}
   \end{array}
 \]
 
