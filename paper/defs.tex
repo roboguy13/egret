@@ -7,8 +7,18 @@
 \newcommand{\labinfer} [3] [] {\infer[{\textsc{#1}}]{#2}{#3}}
 \newcommand{\eq} {\stackrel{\bigcdot}{=}}
 
-\newcommand{\rewrite} {\Rightarrow}
+\newcommand{\rewrite} {\ensuremath{\leadsto}}
 \newcommand{\ra} {\rightarrow}
 \newcommand{\sem} [1] {\llbracket #1 \rrbracket}
+\newcommand{\Lsem} [2] {\mathcal{L}_{#1}\sem{#2}}
 
 \newcommand{\Expr} {\textnormal{Expr}}
+
+\newcommand{\keyword} [1] {\textbf{#1}}
+
+\newcommand{\here} {\keyword{here}}
+\newcommand{\at} {\keyword{at}}
+
+\newcommand{\todo} [1] {\textbf{TODO}: #1}
+
+\newcommand{\tentail} {\rhd}

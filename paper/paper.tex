@@ -3,6 +3,8 @@
 \usepackage{graphicx}
 \usepackage{proof}
 \usepackage{stmaryrd}
+\usepackage{amsmath}
+\usepackage{amssymb}
 
 \input{defs.tex}
 
@@ -18,43 +20,127 @@
 Lorem ipsum~\cite{Elliott-2018-ad-extended}.
 
 \section{Type System}
+
+\subsection{Object language}
 \[
   \begin{array}{c}
-    \labinfer[T-Var]{\Gamma \vdash x : \alpha}{(x : \alpha) \in \Gamma}
+    \labinfer[Ty-Var]{\Gamma \vdash x : \alpha}{(x : \alpha) \in \Gamma}
     \\\\
-    \labinfer[T-App]{\Gamma \vdash f(x) : \beta}{\Gamma \vdash f : \alpha \ra \beta & \Gamma \vdash x : \alpha}
+    \labinfer[Ty-App]{\Gamma \vdash f(e) : \beta}{\Gamma \vdash f : \alpha \ra \beta & \Gamma \vdash e : \alpha}
+  \end{array}
+\]
+
+\subsection{Equations}
+
+\[
+  \begin{array}{c}
+    \labinfer[Ty-Eq]{\Gamma \vdash e_1 \eq e_2 : \alpha}{\Gamma \vdash e_1 : \alpha & \Gamma \vdash e_2 : \alpha}
   \end{array}
 \]
 
 \section{Semantics}
+\todo{This seems a lot like the theory of explicit substitutions. Can we use this?}
 
-\subsection{Formation Rules}
+A \textit{theory} is a pair $(\Gamma, E)$ where $\Gamma$ is a consistent type assignment and $E$ is a set
+of equations that are well-typed under $\Gamma$. That is, if $\mathcal{T} = (\Gamma, E)$ is a theory then for every $(e_1 \eq e_2) \in E$ we have $\Gamma \vdash e_1 \eq e_2 : \alpha$ for
+some type $\alpha$.
+
+\subsection{Basic Rules}
 \[
   \begin{array}{c}
-    \labinfer[Refl]{\Gamma \vdash x \eq x}{\Gamma \vdash x : \alpha}
-    ~~~
-    \labinfer[Sym]{\Gamma \vdash y \eq x}{\Gamma \vdash x \eq y}
-    ~~~
-    \labinfer[Trans]{\Gamma \vdash x \eq z}{\Gamma \vdash x \eq y & \Gamma \vdash y \eq z}
+    \labinfer[Theory-Typing]{(\Gamma, E) \tentail e : \alpha}{\Gamma \vdash e : \alpha}
     \\\\
-    \labinfer[Rewrite]{\Gamma \vdash x \rewrite y}{\Gamma \vdash x \eq y}
+    \labinfer[Eq-Project]{(\Gamma, E) \tentail e_1 \eq e_2}{(e_1 \eq e_2) \in E & \Gamma \vdash e_1 \eq e_2 : \alpha}
+    \\\\
+    \labinfer[Refl]{\mathcal{T} \tentail e \eq e}{\mathcal{T} \vdash e : \alpha}
+    ~~~
+    \labinfer[Sym]{\mathcal{T} \tentail e_2 \eq e_1}{\mathcal{T} \tentail e_1 \eq e_2}
+    ~~~
+    \labinfer[Trans]{\mathcal{T} \tentail e_1 \eq e_3}{\mathcal{T} \tentail e_1 \eq e_2 & \mathcal{T} \tentail e_2 \eq e_3}
+    \\\\
+    \labinfer[Rewrite]{\mathcal{T} \tentail e_1 \rewrite e_2}{\mathcal{T} \tentail e_1 \eq e_2}
   \end{array}
 \]
 
 \subsection{Denotational Semantics}
 
+Consider a denotation function for the object language $\mathcal{M}(\cdot) : \Expr \ra D$. We
+say that this is a \textit{model} for $\mathcal{T}$ if the following property holds:
+
 \[
   \begin{array}{c}
-    \sem{x \rewrite y} : \Expr \ra \mathcal{P}(\Expr)
-    \\
-    \sem{x \rewrite y}(x) = \{x, y\}
-    \\
-    \sem{x \rewrite y}(z) = \{z\}\textnormal{ where $x\neq z$}
-    \\
-    \sem{x \rewrite y}(f(e)) = \{ f'(e') \mid f' \in \sem{x \rewrite y}(f) \land e' \in \sem{x \rewrite y}(e) \}
-        \textnormal{ where $x \neq f(e)$}
+    (\mathcal{T} \tentail e_1 \eq e_2) \implies \mathcal{M}(e_1) = \mathcal{M}(e_2)
   \end{array}
 \]
+
+\noindent
+and we write
+\[
+  \mathcal{M} \models \mathcal{T}
+\]
+
+% We require a denotation function for the object language $\Lsem{T}{\cdot} : \Expr \ra D$ that is invariant
+% under the defined rewrites:
+%
+% \[
+%   (T \vdash e_1 \rewrite e_2) \implies (\Lsem{T}{e_1} = \Lsem{T}{e_2})
+% \]
+%
+% % Given a denotation function for the object language $\Lsem{\cdot} : \Expr \ra D$, we define:
+% %
+% % \[
+% %   \begin{array}{c}
+% %     \sem{R} : \Expr \ra D
+% %     \\
+% %     \sem{\here(x \rewrite y)}(x) = \Lsem{y}
+% %     \\
+% %     \sem{\at(0, x \rewrite y)}(x) = \Lsem{y}
+% %   \end{array}
+% % \]
+%
+\noindent
+We can then give the denotation function for rewrites $\sem{\cdot}$
+
+\[
+  \begin{array}{c}
+    \sem{e_1 \rewrite e_2} : \Expr \ra \mathcal{P}(\Expr)
+    \\
+    \sem{e_1 \rewrite e_2}(e_1) = \{e_1, e_2\}
+    \\
+    \sem{e_1 \rewrite e_2}(e_3) = \{e_3\}\textnormal{ where $e_1\neq e_3$}
+    \\
+    \sem{e_1 \rewrite e_2}(f(e)) = \{ f'(e') \mid f' \in \sem{e_1 \rewrite e_2}(f) \land e' \in \sem{e_1 \rewrite e_2}(e) \}
+        \textnormal{ where $e_1 \neq f(e)$}
+  \end{array}
+\]
+
+\noindent
+This function is extended to operate on entire theories:
+
+\[
+  \begin{array}{c}
+    \sem{\mathcal{T}}(e) = \bigcup\{ \sem{e_1 \rewrite e_2}(e) \mid \mathcal{T} \rhd e_1 \rewrite e_2 \}
+  \end{array}
+\]
+
+\noindent
+It follows that $\sem{\cdot}$ respects models for $\mathcal{T}$. This is \textit{soundness}.
+\[
+  \forall e' \in \sem{\mathcal{T}}(e).\; \mathcal{M}(e) = \mathcal{M}(e')
+\]
+
+\noindent
+The converse of this, \textit{completeness}, does not always hold. When it does hold, it shows that the theory $\mathcal{T}$ captures \textit{every} equality that holds in the model $\mathcal{M}$.
+\[
+  \forall e', e.\; \mathcal{M}(e) = \mathcal{M}(e') \implies e' \in \sem{T}(e)
+\]
+%
+% \noindent
+% This satisfies the following property
+%
+% \[
+%   T \vdash e_1 \rewrite e_2 \implies \forall b \in \sem{e_1 \rewrite e_2}(a),\; \Lsem{T}{a} = \Lsem{T}{b}
+% \]
 
 
 \subsection{Operational Semantics}
