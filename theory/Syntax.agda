@@ -102,6 +102,9 @@ data _∈Theory⟦_⟧_ : ∀ {Γ a} → Expr Γ a → Theory Γ → Expr Γ a �
     e ∈⟦ e₁ ↦ e₂ ⟧ e′ →
     e ∈Theory⟦ T ⟧ e′
 
+_⊢_≐_ : ∀ {Γ a} → Theory Γ → Expr Γ a → Expr Γ a → Set
+_⊢_≐_ T e e′ = e ∈Theory⟦ T ⟧ e′
+
 is-eqn′ : ∀ {Γ a b} {e₁ e₂ : Expr Γ a} {e e′ : Expr Γ b} {T} →
   e ∈⟦ e₁ ↦ e₂ ⟧ e′ →
   T ▷ e₁ ≐ e₂ →
@@ -111,7 +114,7 @@ is-eqn′ Rewrite-here-2 prf-2 = ▷sym prf-2
 is-eqn′ (Rewrite-app prf prf₁) prf-2 = ▷app (is-eqn′ prf prf-2) (is-eqn′ prf₁ prf-2)
 
 is-eqn : ∀ {Γ a} {T : Theory Γ} {e e′ : Expr Γ a} →
-  e ∈Theory⟦ T ⟧ e′ →
+  T ⊢ e ≐ e′ →
   T ▷ e ≐ e′
 is-eqn {Γ} {a} {T} (Theory-Rewrite (▷Rewrite-eq x) Rewrite-here-1) = ▷refl
 is-eqn {Γ} {a} {T} (Theory-Rewrite (▷Rewrite-eq x) Rewrite-here-2) = ▷sym x
@@ -127,14 +130,13 @@ module _ (D : Set) where
 
   soundness : ∀ {Γ a} {T : Theory Γ} {𝓜 : Denotation} {e e′ : Expr Γ a} →
     𝓜 ⊨ T →
-    e′ ∈Theory⟦ T ⟧ e →
+    T ⊢ e ≐ e′ →
     𝓜 e ≡ 𝓜 e′
   soundness models (Theory-Rewrite (▷Rewrite-eq x) x₁) =
     let
         w = is-eqn′ x₁ x
-        z = models w
     in
-    sym z
+    models w
 
   is-complete : ∀ {Γ} → (𝓜 : Denotation) → Theory Γ → Set
   is-complete {Γ} 𝓜 T = ∀ {a} {e₁ e₂ : Expr Γ a} →
