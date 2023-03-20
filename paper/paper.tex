@@ -102,7 +102,7 @@ and we write
 We can then give the denotation function for rewrites $\sem{\cdot}$
 
 \[
-  \begin{array}{c}
+  \begin{array}{l}
     \sem{e_1 \rewrite e_2} : \Expr \ra \mathcal{P}(\Expr)
     \\
     \sem{e_1 \rewrite e_2}(e_1) = \{e_1, e_2\}
@@ -141,6 +141,10 @@ The converse of this, \textit{completeness}, does not always hold. When it does 
 % \[
 %   T \vdash e_1 \rewrite e_2 \implies \forall b \in \sem{e_1 \rewrite e_2}(a),\; \Lsem{T}{a} = \Lsem{T}{b}
 % \]
+
+\subsubsection{Computable Models}
+
+\subsection{Examples}
 
 
 \subsection{Operational Semantics}
