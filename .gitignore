@@ -6,6 +6,7 @@ dist
 **/*.o
 **/*.hi
 **/*~
+**/*.agdai
 
 
 ## Core latex/pdflatex auxiliary files:
